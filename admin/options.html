@@ -96,6 +96,12 @@
     }
     .template-header:hover { background: var(--pink-soft); }
 
+    /* ---- Drag-to-reorder option groups ---- */
+    .template-card[draggable="true"] { cursor: grab; }
+    .template-card[draggable="true"]:active { cursor: grabbing; }
+    .template-card.template-drag-over { border-top: 3px solid var(--pink-deep); }
+    .template-drag-handle { cursor: grab; padding: 0 2px; display: flex; align-items: center; color: var(--text-muted); }
+
     .template-chevron { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
     .template-card.open .template-chevron { transform: rotate(90deg); }
 
@@ -127,6 +133,7 @@
     .choice-name { flex: 1; font-size: var(--text-base); color: var(--text-primary); }
     .choice-th   { flex: 1; font-size: var(--text-sm); color: var(--text-muted); }
     .choice-price { font-size: var(--text-sm); font-weight: 600; color: var(--brown-light); width: 60px; text-align: right; }
+    .choice-vk { font-size: 11px; font-family: ui-monospace, Consolas, monospace; color: #4F7332; background: #EAF2DF; border-radius: var(--radius-pill); padding: 2px 8px; white-space: nowrap; }
 
     .add-choice-row {
       display: flex;
@@ -278,6 +285,7 @@
   <nav class="sidebar-nav">
     <div class="sidebar-group-label">Management</div>
     <a href="/admin/orders.html">&#129534; Order Queue</a>
+    <a href="/admin/rider.html">&#128757; Riders</a>
     <a href="/admin/">&#128203; Menu Management</a>
     <a href="/admin/options.html" class="active">&#9881;&#65039; Options</a>
     <a href="/admin/customers.html">&#127919; Customers</a>
@@ -368,6 +376,39 @@
       <label>Extra Price (฿)</label>
       <input type="number" id="cPrice" placeholder="0" min="0" step="1" />
     </div>
+    <!-- Hidden until migration 038 (visual_key column) is applied -->
+    <div class="form-group" id="cVisualKeyGroup" style="display:none;">
+      <label>Glass preview (แก้วจำลองหน้าสั่งซื้อ)</label>
+      <select id="cVisualKey">
+        <option value="">— ไม่เปลี่ยนแก้ว —</option>
+        <optgroup label="เกรดมัทฉะ">
+          <option value="grade_original">grade_original · สีมัทฉะปกติ</option>
+          <option value="grade_yame">grade_yame · สีมัทฉะเข้ม</option>
+        </optgroup>
+        <optgroup label="นม">
+          <option value="milk_oat">milk_oat · นมโอ๊ต</option>
+          <option value="milk_cow">milk_cow · นมวัว</option>
+        </optgroup>
+        <optgroup label="ความหวาน (ประกายรอบแก้ว)">
+          <option value="sweet_0">sweet_0 · 0%</option>
+          <option value="sweet_50">sweet_50 · 50%</option>
+          <option value="sweet_100">sweet_100 · 100%</option>
+          <option value="sweet_150">sweet_150 · 150%</option>
+        </optgroup>
+        <optgroup label="น้ำแข็ง">
+          <option value="ice_in">ice_in · น้ำแข็งในแก้ว</option>
+          <option value="ice_side">ice_side · แยกน้ำแข็ง</option>
+          <option value="ice_none">ice_none · ไม่รับน้ำแข็ง</option>
+        </optgroup>
+        <optgroup label="แยกมัทฉะ">
+          <option value="matcha_in">matcha_in · เทมัทฉะลงแก้ว</option>
+          <option value="matcha_side">matcha_side · แยกมัทฉะใส่ถ้วย</option>
+        </optgroup>
+        <optgroup label="ท็อปปิ้ง">
+          <option value="top_konjac">top_konjac · บุกน้ำผึ้ง</option>
+        </optgroup>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeChoiceModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveChoice()">Save</button>
@@ -404,7 +445,9 @@
   let editingTemplateId = null;
   let editingChoiceId   = null;
   let editingChoiceTplId = null;
-  let deletingType      = null; // 'template' | 'choice'
+  let editingChoiceHasVisual = false;   // true once migration 038 added visual_key
+  const escVk = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  let deletingType     = null; // 'template' | 'choice'
   let deletingId        = null;
   let deletingParentId  = null;
 
@@ -475,6 +518,7 @@
       const card = document.createElement('div');
       card.className    = 'template-card';
       card.dataset.id   = tpl.id;
+      card.draggable    = true;
 
       card.innerHTML = `
         <div class="template-header"
@@ -484,6 +528,9 @@
              aria-expanded="false"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleCard('${tpl.id}')}">
           <span class="template-chevron">▶</span>
+          <span class="template-drag-handle" title="Drag to reorder option groups" onclick="event.stopPropagation()" aria-label="Drag to reorder option group">
+            <svg width="10" height="14" viewBox="0 0 12 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;opacity:0.5;"><circle cx="4" cy="3" r="1.5" fill="currentColor"/><circle cx="8" cy="3" r="1.5" fill="currentColor"/><circle cx="4" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="4" cy="13" r="1.5" fill="currentColor"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/></svg>
+          </span>
           <span class="template-name">${tpl.name}${tpl.name_th ? ` <span style="font-weight:400;font-size:13px;color:var(--text-muted);">/ ${tpl.name_th}</span>` : ''}</span>
           <span class="template-meta">${choices.length} choice${choices.length !== 1 ? 's' : ''}</span>
           <span class="${tpl.is_required ? 'badge-required' : 'badge-optional'}">${tpl.is_required ? 'Required' : 'Optional'}</span>
@@ -520,6 +567,7 @@
                 <span class="choice-name">${c.name}</span>
                 <span class="choice-th">${c.name_th || ''}</span>
                 <span class="choice-price">${c.additional_price > 0 ? '+฿' + c.additional_price : '฿0'}</span>
+                ${c.visual_key ? `<span class="choice-vk" title="Glass preview key">${escVk(c.visual_key)}</span>` : ''}
                 <button class="btn btn-ghost btn-xs" onclick="openEditChoiceModal('${tpl.id}','${c.id}')">Edit</button>
                 <button class="btn btn-danger btn-xs" onclick="openDeleteModal('choice','${c.id}','${tpl.id}','${c.name}')">✕</button>
               </div>
@@ -545,6 +593,52 @@
         </div>`;
 
       list.appendChild(card);
+    });
+    initTemplateDrag();
+  }
+
+  // ---- Drag-to-reorder option groups ----
+  function initTemplateDrag() {
+    const list = document.getElementById('templatesList');
+    let dragSrc = null;
+    list.querySelectorAll('.template-card[draggable]').forEach(card => {
+      card.addEventListener('dragstart', event => {
+        dragSrc = card;
+        // Firefox requires data to be set before it will begin an HTML5 drag.
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.id);
+        card.style.opacity = '0.4';
+      });
+      card.addEventListener('dragend', () => {
+        card.style.opacity = '';
+        list.querySelectorAll('.template-card').forEach(c => c.classList.remove('template-drag-over'));
+      });
+      card.addEventListener('dragover', event => {
+        event.preventDefault();
+        if (card !== dragSrc) card.classList.add('template-drag-over');
+      });
+      card.addEventListener('dragleave', () => card.classList.remove('template-drag-over'));
+      card.addEventListener('drop', async event => {
+        event.preventDefault();
+        if (!dragSrc || dragSrc === card) return;
+        const fromIdx = templates.findIndex(t => t.id === dragSrc.dataset.id);
+        const toIdx = templates.findIndex(t => t.id === card.dataset.id);
+        if (fromIdx < 0 || toIdx < 0) return;
+        const [moved] = templates.splice(fromIdx, 1);
+        templates.splice(toIdx, 0, moved);
+        renderTemplates();
+        const results = await Promise.all(templates.map((template, index) =>
+          supabase.from('option_templates').update({ sort_order: index + 1 }).eq('id', template.id)
+        ));
+        const failed = results.find(result => result.error);
+        if (failed) {
+          showToast('Could not save order: ' + failed.error.message);
+          await loadTemplates();
+          renderTemplates();
+          return;
+        }
+        showToast('Option group order saved');
+      });
     });
   }
 
@@ -649,6 +743,15 @@
     document.getElementById('cName').value  = choice.name    || '';
     document.getElementById('cNameTh').value= choice.name_th || '';
     document.getElementById('cPrice').value = choice.additional_price || 0;
+    // select('*') only returns visual_key once migration 038 has run
+    const hasVisual = 'visual_key' in choice;
+    document.getElementById('cVisualKeyGroup').style.display = hasVisual ? '' : 'none';
+    const vkSel = document.getElementById('cVisualKey');
+    if (choice.visual_key && !vkSel.querySelector(`option[value="${CSS.escape(choice.visual_key)}"]`)) {
+      vkSel.add(new Option(choice.visual_key, choice.visual_key));   // keep an unknown key instead of silently clearing it
+    }
+    vkSel.value = choice.visual_key || '';
+    editingChoiceHasVisual = hasVisual;
     document.getElementById('choiceModal').classList.add('show');
   }
 
@@ -657,11 +760,13 @@
   }
 
   async function saveChoice() {
-    const { error } = await supabase.from('option_template_choices').update({
+    const payload = {
       name:             document.getElementById('cName').value.trim(),
       name_th:          document.getElementById('cNameTh').value.trim(),
       additional_price: parseFloat(document.getElementById('cPrice').value) || 0,
-    }).eq('id', editingChoiceId);
+    };
+    if (editingChoiceHasVisual) payload.visual_key = document.getElementById('cVisualKey').value || null;
+    const { error } = await supabase.from('option_template_choices').update(payload).eq('id', editingChoiceId);
     if (error) { showToast('Error: ' + error.message); return; }
     closeChoiceModal();
     showToast('Choice updated');

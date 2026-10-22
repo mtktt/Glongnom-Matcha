@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Glongnom — งานส่ง</title>
+  <link rel="stylesheet" href="/css/design-system.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sarabun', system-ui, sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; }
+    .wrap { max-width: 460px; margin: 0 auto; padding: 18px 16px 60px; }
+
+    .brand { display: flex; align-items: center; gap: 10px; padding: 8px 2px 18px; }
+    .brand .logo { font-size: 26px; }
+    .brand .name { font-weight: 800; font-size: 18px; color: var(--brown-dark); }
+    .brand .sub { font-size: 12px; color: var(--text-muted); }
+
+    .card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 16px; }
+
+    .job-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .job-no { font-weight: 800; font-size: 24px; color: var(--brown-dark); }
+
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; }
+    .badge-open      { background: #fff4d6; color: #9a6a12; }
+    .badge-accepted  { background: #e0efff; color: #1565c0; }
+    .badge-picked_up { background: #ede0ff; color: #6a1b9a; }
+    .badge-delivered { background: #e4f5e4; color: #2e7d32; }
+    .badge-cancelled { background: var(--error-light); color: var(--error); }
+    .badge-assigned  { background: #fff4d6; color: #9a6a12; }
+
+    .info-row { display: flex; gap: 10px; padding: 11px 0; border-bottom: 1px dashed var(--border); font-size: 15px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .ic { width: 22px; flex-shrink: 0; text-align: center; }
+    .info-row .lbl { color: var(--text-muted); font-size: 12px; }
+    .info-row .val { font-weight: 600; }
+    .info-row a { color: var(--pink-deep); text-decoration: none; font-weight: 700; }
+    .fee-big { font-size: 26px; font-weight: 800; color: var(--brown-dark); }
+
+    /* wait timer (open jobs) */
+    .wait-timer { display: inline-flex; align-items: center; gap: 6px; background: #fff4d6; color: #9a6a12; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: var(--radius-pill); margin-bottom: 16px; }
+
+    /* route (prominent) */
+    .route { background: var(--surface-warm); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 14px; }
+    .route-pt { display: flex; gap: 12px; align-items: flex-start; }
+    .route-ic { font-size: 20px; flex-shrink: 0; line-height: 1.3; }
+    .route-lbl { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .route-val { font-weight: 700; font-size: 15px; color: var(--text-primary); }
+    .route-val.big { font-size: 19px; color: var(--brown-dark); line-height: 1.3; }
+    .route-line { width: 2px; height: 16px; background: var(--pink-accent); margin: 2px 0 2px 9px; }
+
+    /* fee (prominent) */
+    .fee-box { display: flex; align-items: center; justify-content: space-between; background: #e8f7ef; border: 1.5px solid #b6e2cd; border-radius: var(--radius-md); padding: 12px 18px; margin-bottom: 18px; }
+    .fee-box .fee-lbl { font-size: 14px; font-weight: 700; color: #1c7a52; }
+    .fee-box .fee-amt { font-size: 30px; font-weight: 800; color: #15633f; }
+
+    /* secondary sections */
+    .sec-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin: 0 0 8px; }
+    .items { margin-bottom: 16px; }
+    .item { display: flex; gap: 10px; padding: 6px 0; font-size: 15px; border-bottom: 1px dashed var(--border); }
+    .item:last-child { border-bottom: none; }
+    .item .q { font-weight: 800; color: var(--pink-deep); min-width: 34px; }
+    .cust { font-size: 15px; }
+    .cust a { color: var(--pink-deep); text-decoration: none; font-weight: 700; }
+
+    .btn { width: 100%; padding: 15px; border-radius: var(--radius-pill); border: none; font-size: 17px; font-weight: 800; font-family: inherit; cursor: pointer; transition: transform 0.05s, background 0.2s; }
+    .btn:active { transform: scale(0.985); }
+    .btn-accept  { background: #22a06b; color: #fff; }
+    .btn-accept:hover { background: #1c8c5c; }
+    .btn-step    { background: var(--brown-dark); color: #fff; }
+    .btn-step:hover { background: var(--brown-mid); }
+    .btn-ghost   { background: var(--surface-warm); color: var(--text-secondary); border: 1.5px solid var(--border); }
+
+    .who { display: flex; align-items: center; gap: 10px; background: var(--pink-soft); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; font-size: 14px; }
+    .who b { color: var(--brown-dark); }
+    .muted { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+
+    .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+    .field input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: inherit; font-size: 16px; background: var(--surface); color: var(--text-primary); }
+    .field input:focus { outline: none; border-color: var(--pink-deep); box-shadow: 0 0 0 3px rgba(255,133,161,0.18); }
+
+    /* timeline */
+    .timeline { margin-top: 4px; }
+    .tl-step { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; color: var(--text-muted); }
+    .tl-step .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .tl-step.done { color: var(--text-primary); font-weight: 600; }
+    .tl-step.done .dot { background: #22a06b; }
+
+    .notice { text-align: center; padding: 40px 20px; }
+    .notice .big-ic { font-size: 46px; margin-bottom: 12px; }
+    .notice h2 { font-size: 20px; margin-bottom: 8px; color: var(--brown-dark); }
+
+    .spacer-sm { height: 10px; }
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--brown-dark); color: #fff; padding: 12px 22px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 600; box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 1400; max-width: 90%; text-align: center; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.error { background: var(--error); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <span class="logo">🛵</span>
+      <div>
+        <div class="name">Glongnom</div>
+        <div class="sub">งานส่งเดลิเวอรี</div>
+      </div>
+    </div>
+    <div id="app">
+      <div class="card"><div class="muted" style="text-align:center;padding:20px;">กำลังโหลด…</div></div>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+  <script>
+    const $app = document.getElementById('app');
+    const RIDER_KEY = 'glongnom_rider';
+    const CLAIMED_KEY = 'glongnom_claimed_jobs';
+    const STATUS_LABEL = { open:'รอไรเดอร์รับ', assigned:'มอบหมายแล้ว', accepted:'รับงานแล้ว', picked_up:'รับของแล้ว', delivered:'ส่งสำเร็จ', cancelled:'ยกเลิก' };
+
+    function qs(k) { return new URLSearchParams(location.search).get(k); }
+    function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function fmtTime(d) { return d ? new Date(d).toLocaleString('th-TH', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''; }
+    function fmtBaht(n) { return '฿' + (Number(n)||0).toLocaleString('en-US'); }
+    function toast(msg, err) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.toggle('error', !!err); t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
+
+    function getRider() { try { return JSON.parse(localStorage.getItem(RIDER_KEY) || 'null'); } catch(e){ return null; } }
+    function setRider(r) { try { localStorage.setItem(RIDER_KEY, JSON.stringify(r)); } catch(e){} }
+    function getClaimed() { try { return JSON.parse(localStorage.getItem(CLAIMED_KEY) || '[]'); } catch(e){ return []; } }
+    function addClaimed(tok) { const a = getClaimed(); if (!a.includes(tok)) { a.push(tok); try { localStorage.setItem(CLAIMED_KEY, JSON.stringify(a)); } catch(e){} } }
+
+    // ── SETUP: personal link stores identity on this device ──
+    async function doSetup(token) {
+      const { data, error } = await supabase.rpc('get_rider_identity', { p_claim_token: token });
+      if (error) { renderNotice('⚠️', 'เกิดข้อผิดพลาด', error.message); return; }
+      const rider = data && data[0];
+      if (!rider) { renderNotice('🚫', 'ลิงก์ไม่ถูกต้อง', 'ลิงก์ยืนยันตัวตนนี้ใช้ไม่ได้ หรือไรเดอร์ถูกปิดใช้งาน — ติดต่อร้านเพื่อขอลิงก์ใหม่'); return; }
+      setRider({ claim_token: token, id: rider.rider_id, name: rider.rider_name });
+      $app.innerHTML = `
+        <div class="card notice">
+          <div class="big-ic">✅</div>
+          <h2>ยืนยันตัวตนแล้ว</h2>
+          <p class="muted">อุปกรณ์นี้จะรับงานในนาม<br><b style="color:var(--brown-dark);font-size:16px;">${escHtml(rider.rider_name)}</b></p>
+          <div class="spacer-sm"></div>
+          <p class="muted">เมื่อร้านส่งลิงก์งานในกลุ่ม LINE เปิดแล้วกด "รับงาน" ได้เลย ระบบจะรู้ว่าเป็นคุณอัตโนมัติ</p>
+        </div>`;
+    }
+
+    // ── JOB: load + render ──
+    let currentToken = null;
+    let currentJob = null;
+
+    async function loadJob(token) {
+      currentToken = token;
+      const { data, error } = await supabase.rpc('get_rider_job', { p_accept_token: token });
+      if (error) { renderNotice('⚠️', 'เกิดข้อผิดพลาด', error.message); return; }
+      const job = data && data[0];
+      if (!job) { renderNotice('🔍', 'ไม่พบงานนี้', 'ลิงก์อาจหมดอายุหรือถูกลบ'); return; }
+      currentJob = job;
+      renderJob();
+    }
+
+    // จุดรับ = ร้าน (แก้ข้อความตรงนี้ได้ถ้าย้ายร้าน)
+    const PICKUP = 'Glongnom · Dcondo Dome Rangsit';
+
+    function jobCardHtml(job) {
+      const dest = [job.dropoff_label, job.delivery_address].filter(Boolean).map(escHtml).join(' — ') || '—';
+      const timer = job.status === 'open'
+        ? `<div class="wait-timer" id="waitTimer">⏱ รอไรเดอร์รับ 00:00</div>` : '';
+      const items = (Array.isArray(job.items) && job.items.length)
+        ? job.items.map(it => `<div class="item"><span class="q">${escHtml(it.qty)}×</span><span>${escHtml(it.name || '—')}</span></div>`).join('')
+        : '<div class="muted">— ไม่มีรายการเมนู —</div>';
+      const qtyTotal = Array.isArray(job.items) ? job.items.reduce((s, i) => s + (Number(i.qty) || 0), 0) : 0;
+      const phone = job.customer_phone
+        ? ` · <a href="tel:${escHtml(job.customer_phone)}">${escHtml(job.customer_phone)} 📞</a>` : '';
+      const noteHtml = job.note ? `<div class="muted" style="margin-top:8px;">📝 ${escHtml(job.note)}</div>` : '';
+      return `
+        <div class="card">
+          <div class="job-head">
+            <span class="job-no">${escHtml(job.order_no || 'งานส่ง')}</span>
+            <span class="badge badge-${job.status}">${STATUS_LABEL[job.status] || job.status}</span>
+          </div>
+          ${timer}
+          <div class="route">
+            <div class="route-pt">
+              <span class="route-ic">📍</span>
+              <div><div class="route-lbl">รับที่</div><div class="route-val">${escHtml(PICKUP)}</div></div>
+            </div>
+            <div class="route-line"></div>
+            <div class="route-pt">
+              <span class="route-ic">🏁</span>
+              <div><div class="route-lbl">ส่งที่</div><div class="route-val big">${dest}</div></div>
+            </div>
+          </div>
+          <div class="fee-box">
+            <span class="fee-lbl">💰 ค่ารอบ</span>
+            <span class="fee-amt">${fmtBaht(job.rider_fee)}</span>
+          </div>
+          <div class="sec-lbl">รายการ${qtyTotal ? ` (${qtyTotal} แก้ว)` : ''}</div>
+          <div class="items">${items}</div>
+          <div class="sec-lbl">ลูกค้า</div>
+          <div class="cust">${escHtml(job.customer_name || '—')}${phone}</div>
+          ${noteHtml}
+        </div>`;
+    }
+
+    // นับเวลาตั้งแต่สร้างลิงก์ (assigned_at) จนกว่าจะมีคนรับงาน
+    let waitTimer = null;
+    function stopWaitTimer() { if (waitTimer) { clearInterval(waitTimer); waitTimer = null; } }
+    function startWaitTimer(startISO) {
+      stopWaitTimer();
+      const el = document.getElementById('waitTimer');
+      if (!el || !startISO) return;
+      const start = new Date(startISO).getTime();
+      function tick() {
+        const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
+        const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+        const t = (hh > 0 ? hh + ':' + String(mm).padStart(2, '0') : mm) + ':' + String(ss).padStart(2, '0');
+        el.textContent = '⏱ รอไรเดอร์รับ ' + t;
+      }
+      tick();
+      waitTimer = setInterval(tick, 1000);
+    }
+
+    function timelineHtml(job) {
+      const steps = [
+        ['accepted','รับงาน', job.accepted_at],
+        ['picked_up','รับของจากร้าน', job.picked_up_at],
+        ['delivered','ส่งสำเร็จ', job.delivered_at]
+      ];
+      return `<div class="timeline">${steps.map(s =>
+        `<div class="tl-step ${s[2] ? 'done' : ''}"><span class="dot"></span><span>${s[1]}${s[2] ? ' · ' + fmtTime(s[2]) : ''}</span></div>`
+      ).join('')}</div>`;
+    }
+
+    function renderJob() {
+      const job = currentJob;
+      const rider = getRider();
+      const claimed = getClaimed().includes(currentToken);
+      const mineByName = rider && job.accepted_rider && job.accepted_rider === rider.name;
+      const isMine = claimed || mineByName;
+
+      let actionHtml = '';
+
+      if (job.status === 'open') {
+        if (rider) {
+          actionHtml = `
+            <div class="who"><span>🛵</span><span>รับงานในนาม <b>${escHtml(rider.name)}</b></span></div>
+            <button class="btn btn-accept" onclick="acceptJob()">✅ รับงานนี้</button>`;
+        } else {
+          actionHtml = identityPromptHtml();
+        }
+      } else if (job.status === 'cancelled') {
+        actionHtml = `<div class="who" style="background:var(--error-light);"><span>🚫</span><span>งานนี้ถูกยกเลิกแล้ว</span></div>`;
+      } else {
+        // taken (accepted / picked_up / delivered)
+        if (isMine) {
+          actionHtml = `<div class="who"><span>✅</span><span>คุณรับงานนี้แล้ว</span></div>` + timelineHtml(job);
+          if (job.status === 'accepted') {
+            actionHtml += `<div class="spacer-sm"></div><button class="btn btn-step" onclick="setStatus('picked_up')">📦 รับของจากร้านแล้ว</button>`;
+          } else if (job.status === 'picked_up') {
+            actionHtml += `<div class="spacer-sm"></div><button class="btn btn-step" onclick="setStatus('delivered')">🏁 ส่งสำเร็จ</button>`;
+          } else if (job.status === 'delivered') {
+            actionHtml += `<div class="spacer-sm"></div><div class="notice" style="padding:14px;"><div class="big-ic">🎉</div><b>ส่งสำเร็จแล้ว ขอบคุณครับ!</b></div>`;
+          }
+        } else {
+          actionHtml = `<div class="who"><span>🛵</span><span>งานนี้ถูกรับไปแล้วโดย <b>${escHtml(job.accepted_rider || 'ไรเดอร์คนอื่น')}</b></span></div>` + timelineHtml(job);
+        }
+      }
+
+      $app.innerHTML = `${jobCardHtml(job)}<div class="card">${actionHtml}</div>`;
+      stopWaitTimer();
+      if (job.status === 'open') startWaitTimer(job.assigned_at);
+    }
+
+    function identityPromptHtml() {
+      return `
+        <div class="muted" style="margin-bottom:12px;">ยืนยันว่าคุณเป็นไรเดอร์ที่ลงทะเบียนกับร้าน เพื่อกดรับงาน</div>
+        <div class="field">
+          <label>รหัสไรเดอร์ของคุณ</label>
+          <input type="text" id="codeInput" placeholder="วางรหัส/ลิงก์ที่ร้านให้ไว้" autocomplete="off" />
+        </div>
+        <div class="spacer-sm"></div>
+        <button class="btn btn-accept" onclick="verifyCode()">ยืนยันตัวตน</button>
+        <div class="spacer-sm"></div>
+        <div class="muted" style="text-align:center;">ยังไม่มีรหัส? ขอลิงก์ส่วนตัวจากร้าน แล้วเปิดครั้งเดียว อุปกรณ์จะจำให้</div>`;
+    }
+
+    async function verifyCode() {
+      let code = (document.getElementById('codeInput').value || '').trim();
+      if (!code) { toast('ใส่รหัสไรเดอร์ก่อน', true); return; }
+      // accept either a raw token or a pasted setup link
+      const m = code.match(/[?&]setup=([^&\s]+)/);
+      if (m) code = decodeURIComponent(m[1]);
+      const { data, error } = await supabase.rpc('get_rider_identity', { p_claim_token: code });
+      if (error) { toast(error.message, true); return; }
+      const rider = data && data[0];
+      if (!rider) { toast('รหัสไม่ถูกต้อง หรือไม่ใช่ไรเดอร์ที่ลงทะเบียน', true); return; }
+      setRider({ claim_token: code, id: rider.rider_id, name: rider.rider_name });
+      toast('ยืนยันตัวตนแล้ว: ' + rider.rider_name);
+      renderJob();
+    }
+
+    async function acceptJob() {
+      const rider = getRider();
+      if (!rider) { toast('ยืนยันตัวตนก่อน', true); return; }
+      const { data, error } = await supabase.rpc('claim_rider_job', { p_accept_token: currentToken, p_claim_token: rider.claim_token });
+      if (error) { toast(error.message, true); return; }
+      if (data && data.ok) {
+        addClaimed(currentToken);
+        toast('รับงานสำเร็จ! 🎉');
+        await loadJob(currentToken);
+      } else if (data && data.error === 'already_yours') {
+        addClaimed(currentToken);
+        await loadJob(currentToken);
+      } else if (data && data.error === 'already_taken') {
+        toast('งานนี้ถูกรับไปแล้วโดย ' + (data.taken_by || 'ไรเดอร์คนอื่น'), true);
+        await loadJob(currentToken);
+      } else if (data && data.error === 'not_registered') {
+        toast('อุปกรณ์นี้ยังไม่ได้ยืนยันตัวตนไรเดอร์', true);
+        localStorage.removeItem(RIDER_KEY);
+        renderJob();
+      } else {
+        toast('รับงานไม่สำเร็จ', true);
+        await loadJob(currentToken);
+      }
+    }
+
+    async function setStatus(newStatus) {
+      const rider = getRider();
+      if (!rider) { toast('ยืนยันตัวตนก่อน', true); return; }
+      const { data, error } = await supabase.rpc('update_rider_job_status', { p_accept_token: currentToken, p_claim_token: rider.claim_token, p_status: newStatus });
+      if (error) { toast(error.message, true); return; }
+      if (data && data.ok) {
+        toast(newStatus === 'delivered' ? 'ส่งสำเร็จ! ขอบคุณครับ 🎉' : 'อัปเดตแล้ว');
+        await loadJob(currentToken);
+      } else if (data && data.error === 'not_your_job') {
+        toast('งานนี้ไม่ใช่ของคุณ', true);
+        await loadJob(currentToken);
+      } else {
+        toast('อัปเดตไม่สำเร็จ', true);
+      }
+    }
+
+    function renderNotice(icon, title, body) {
+      stopWaitTimer();
+      $app.innerHTML = `<div class="card notice"><div class="big-ic">${icon}</div><h2>${escHtml(title)}</h2><p class="muted">${escHtml(body)}</p></div>`;
+    }
+
+    // ── ROUTER ──
+    (function init() {
+      const setup = qs('setup');
+      const job = qs('job');
+      if (setup) { doSetup(setup); }
+      else if (job) { loadJob(job); }
+      else { renderNotice('🛵', 'Glongnom งานส่ง', 'เปิดลิงก์งานที่ร้านส่งให้ในกลุ่ม LINE เพื่อรับงาน'); }
+    })();
+  </script>
+</body>
+</html>

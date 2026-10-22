@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Glongnom Admin — Riders</title>
+  <link rel="stylesheet" href="/css/design-system.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/auth.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sarabun', system-ui, sans-serif; background: var(--bg); color: var(--text-primary); padding-top: 52px; }
+
+    /* ── TOPBAR ── */
+    .topbar { background: var(--surface-warm); border-bottom: 1.5px solid var(--border); box-shadow: var(--shadow-xs); height: 52px; display: flex; align-items: center; padding: 0 16px; position: fixed; top: 0; left: 0; right: 0; z-index: 1100; gap: 12px; }
+    .topbar-hamburger { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--brown-dark); padding: 4px 6px; flex-shrink: 0; line-height: 1; }
+    .topbar-hamburger:hover { color: var(--brown-mid); }
+    .topbar-brand { font-weight: 700; font-size: var(--text-base); color: var(--brown-dark); white-space: nowrap; }
+    .topbar-page-label { font-size: var(--text-sm); color: var(--text-muted); white-space: nowrap; }
+    .topbar-spacer { flex: 1; }
+
+    /* ── SIDEBAR ── */
+    .sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(61,28,2,0.35); z-index: 1150; }
+    .sidebar-backdrop.show { display: block; }
+    #sidebar { position: fixed; top: 0; left: 0; height: 100vh; width: 260px; background: var(--surface-warm); border-right: 1.5px solid var(--border); box-shadow: var(--shadow-lg); z-index: 1200; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; }
+    #sidebar.open { transform: translateX(0); }
+    .sidebar-header { height: 60px; display: flex; align-items: center; padding: 0 20px; border-bottom: 2px solid var(--pink-accent); flex-shrink: 0; }
+    .sidebar-header .sb-brand { font-weight: 800; font-size: 16px; color: var(--brown-dark); flex: 1; }
+    .sidebar-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 4px; }
+    .sidebar-close:hover { color: var(--brown-dark); }
+    .sidebar-nav a { display: block; text-decoration: none; padding: 12px 20px; font-size: 14px; font-weight: 600; font-family: 'Sarabun', system-ui, sans-serif; color: var(--text-secondary); border-left: 3px solid transparent; transition: background 0.15s, color 0.15s; }
+    .sidebar-nav a:hover { background: var(--surface); color: var(--brown-mid); }
+    .sidebar-nav a.active { background: var(--pink-soft); color: var(--brown-dark); border-left-color: var(--pink-deep); }
+    .sidebar-divider { height: 1px; background: var(--border); margin: 8px 0; }
+    .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+    .sidebar-user-info { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .sidebar-signout { width: 100%; padding: 9px 14px; border-radius: var(--radius-pill); border: 1.5px solid var(--border); background: none; font-size: 13px; font-weight: 600; font-family: 'Sarabun', system-ui, sans-serif; color: var(--text-secondary); cursor: pointer; }
+    .sidebar-signout:hover { background: var(--error-light); color: var(--error); border-color: var(--error); }
+
+    /* ── BUTTONS ── */
+    .btn { padding: 9px 18px; border-radius: var(--radius-pill); border: none; font-size: var(--text-base); font-weight: 600; font-family: 'Sarabun', system-ui, sans-serif; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: var(--brown-dark); color: #fff; }
+    .btn-primary:hover { background: var(--brown-mid); }
+    .btn-ghost { background: var(--surface-warm); color: var(--text-secondary); border: 1.5px solid var(--border); }
+    .btn-ghost:hover { background: var(--pink-soft); }
+    .btn-sm { padding: 6px 13px; font-size: 13px; }
+    .btn-danger { background: var(--error-light); color: var(--error); border: 1.5px solid rgba(192,57,43,0.3); }
+    .btn-danger:hover { background: #ffd5d5; }
+
+    /* ── PAGE ── */
+    .page-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 18px 80px; }
+    .page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .page-head h1 { font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary); }
+    .page-head .spacer { flex: 1; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--border); margin-bottom: 20px; }
+    .tabs button { appearance: none; background: none; border: none; font-family: inherit; cursor: pointer; padding: 11px 16px; font-size: var(--text-base); font-weight: 700; color: var(--text-muted); border-bottom: 3px solid transparent; margin-bottom: -1.5px; }
+    .tabs button.active { color: var(--brown-dark); border-bottom-color: var(--pink-deep); }
+    .panel[hidden] { display: none; }
+
+    /* Summary chips */
+    .summary-row { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .summary-chip { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 10px 16px; min-width: 110px; }
+    .summary-chip .lbl { font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; }
+    .summary-chip .val { font-size: var(--text-xl); font-weight: 800; color: var(--text-primary); margin-top: 2px; }
+    .summary-chip .val.accent { color: var(--pink-deep); }
+
+    /* Rider cards */
+    .rider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .rider-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-xs); }
+    .rider-card .rc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .rc-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--pink-soft); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .rc-name { font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); }
+    .rc-meta { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; }
+    .rc-meta a { color: var(--brown-mid); text-decoration: none; }
+    .rc-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .rc-actions .btn { flex: 1; }
+
+    /* Status badge / pill */
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; }
+    .badge-active   { background: #e4f5e4; color: #2e7d32; }
+    .badge-inactive { background: #f0f0f0; color: #888; }
+    .badge-open      { background: #fde8c8; color: #b45309; }
+    .badge-assigned  { background: #fff4d6; color: #9a6a12; }
+    .badge-accepted  { background: #e0efff; color: #1565c0; }
+    .badge-picked_up { background: #ede0ff; color: #6a1b9a; }
+    .badge-delivered { background: #e4f5e4; color: #2e7d32; }
+    .badge-cancelled { background: var(--error-light); color: var(--error); }
+
+    /* Filters */
+    .filter-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .filter-row select, .filter-row input { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-pill); font-family: inherit; font-size: var(--text-sm); background: var(--surface); color: var(--text-primary); }
+    .date-field { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
+    .date-field input { padding: 7px 10px; }
+
+    /* Table */
+    .table-wrap { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+    th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; background: var(--surface-warm); }
+    td.num { text-align: right; font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .job-actions { display: flex; gap: 6px; }
+    .icon-btn { border: 1.5px solid var(--border); background: var(--surface-warm); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; line-height: 1; color: var(--text-secondary); }
+    .icon-btn:hover { background: var(--pink-soft); color: var(--brown-dark); }
+    .icon-btn.danger:hover { background: var(--error-light); color: var(--error); border-color: var(--error); }
+
+    .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: var(--text-sm); }
+
+    /* Rider payout toggle + wage subtotal footer */
+    .pay-toggle { border: 1.5px solid transparent; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: var(--radius-pill); }
+    .pay-toggle.paid   { background: #d4edda; color: #155724; }
+    .pay-toggle.unpaid { background: #fff3cd; color: #856404; }
+    .pay-toggle:hover  { border-color: rgba(0,0,0,0.15); }
+    tfoot td { background: var(--surface-warm); font-weight: 800; border-top: 1.5px solid var(--border); border-bottom: none; }
+    tfoot .foot-label { text-align: right; font-weight: 700; color: var(--text-secondary); }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(61,28,2,0.4); z-index: 1300; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 16px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: 100%; max-width: 480px; padding: 24px; }
+    .modal h2 { font-size: var(--text-xl); font-weight: 800; margin-bottom: 18px; color: var(--text-primary); }
+    .form-field { margin-bottom: 14px; }
+    .form-field label { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+    .form-field input, .form-field select, .form-field textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: inherit; font-size: var(--text-base); background: var(--surface); color: var(--text-primary); }
+    .form-field textarea { resize: vertical; min-height: 60px; }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--pink-deep); box-shadow: 0 0 0 3px rgba(255,133,161,0.18); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-hint { font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .modal-actions .btn { flex: 1; }
+    .inline-load { display: flex; gap: 8px; align-items: flex-end; }
+    .inline-load .form-field { flex: 1; margin-bottom: 0; }
+    .switch-row { display: flex; align-items: center; gap: 10px; }
+    .switch-row input { width: auto; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--brown-dark); color: #fff; padding: 12px 22px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 1400; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.error { background: var(--error); }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-hamburger" onclick="openSidebar()" aria-label="Open menu">&#9776;</button>
+  <span class="topbar-brand">Glongnom POS</span>
+  <span class="topbar-page-label">/ Riders</span>
+  <div class="topbar-spacer"></div>
+</div>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<aside id="sidebar" role="navigation" aria-label="Admin navigation">
+  <div class="sidebar-header">
+    <span class="sb-brand">Glongnom POS</span>
+    <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">&times;</button>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-group-label">Management</div>
+    <a href="/admin/orders.html">&#129534; Order Queue</a>
+    <a href="/admin/rider.html" class="active">&#128757; Riders</a>
+    <a href="/admin/">&#128203; Menu Management</a>
+    <a href="/admin/options.html">&#9881;&#65039; Options</a>
+    <a href="/admin/customers.html">&#127919; Customers</a>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-group-label">Inventory</div>
+    <a href="/admin/inventory.html">&#128230; Inventory</a>
+    <a href="/admin/suppliers.html">&#128666; Suppliers</a>
+    <a href="/admin/purchase-orders.html">&#128722; Purchases</a>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-group-label">Analysis</div>
+    <a href="/admin/dashboard.html">&#128202; Dashboard</a>
+    <a href="/admin/reports.html">&#128202; Reports</a>
+    <a href="/admin/accounting.html">&#128210; Accounting</a>
+    <a href="/admin/finance.html">&#128200; Finance</a>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-group-label">Setting</div>
+    <a href="/admin/users.html">&#128101; Staff</a>
+    <a href="/admin/printer.html">&#128424;&#65039; Printers</a>
+  </nav>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-footer">
+    <div class="sidebar-user-info" id="sidebarUserInfo">Loading…</div>
+    <button class="sidebar-signout" onclick="Auth.signOut()">Sign Out</button>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════ MAIN -->
+<div class="page-wrap">
+
+  <div class="tabs">
+    <button id="tabBtnRiders" class="active" onclick="switchTab('riders')">&#128757; ไรเดอร์</button>
+    <button id="tabBtnJobs" onclick="switchTab('jobs')">&#128220; ประวัติการรับงาน</button>
+    <button id="tabBtnWages" onclick="switchTab('wages')">&#128176; ค่าจ้างไรเดอร์</button>
+  </div>
+
+  <!-- ── PANEL: RIDERS ── -->
+  <section id="panelRiders" class="panel">
+    <div class="page-head">
+      <h1>ไรเดอร์</h1>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" onclick="openRiderModal()">＋ เพิ่มไรเดอร์</button>
+    </div>
+    <div class="summary-row" id="riderSummary"></div>
+    <div id="riderGrid" class="rider-grid"></div>
+  </section>
+
+  <!-- ── PANEL: JOBS ── -->
+  <section id="panelJobs" class="panel" hidden>
+    <div class="page-head">
+      <h1>ประวัติการรับงาน</h1>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" onclick="openJobModal()">＋ บันทึกงาน</button>
+    </div>
+    <div class="summary-row" id="jobSummary"></div>
+    <div class="filter-row">
+      <select id="filterRider" onchange="renderJobs()"><option value="">ไรเดอร์ทั้งหมด</option></select>
+      <select id="filterStatus" onchange="renderJobs()">
+        <option value="">ทุกสถานะ</option>
+        <option value="open">รอไรเดอร์รับ</option>
+        <option value="assigned">มอบหมายแล้ว</option>
+        <option value="accepted">รับงานแล้ว</option>
+        <option value="picked_up">รับของแล้ว</option>
+        <option value="delivered">ส่งสำเร็จ</option>
+        <option value="cancelled">ยกเลิก</option>
+      </select>
+      <select id="filterPaid" onchange="renderJobs()">
+        <option value="">จ่าย/ค้าง ทั้งหมด</option>
+        <option value="unpaid">ค้างจ่าย</option>
+        <option value="paid">จ่ายแล้ว</option>
+      </select>
+      <label class="date-field">ตั้งแต่ <input type="date" id="filterFrom" onchange="renderJobs()"></label>
+      <label class="date-field">ถึง <input type="date" id="filterTo" onchange="renderJobs()"></label>
+      <button class="btn btn-ghost" style="padding:8px 14px;font-size:var(--text-sm);" onclick="clearJobFilters()">ล้างตัวกรอง</button>
+      <input type="text" id="filterSearch" placeholder="ค้นหา ออเดอร์ / ลูกค้า / ที่ส่ง…" oninput="renderJobs()" />
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>มอบหมาย</th><th>ไรเดอร์</th><th>ออเดอร์</th><th>ลูกค้า</th><th>สถานที่ส่ง</th>
+            <th class="num">ค่าจ้าง</th><th>จ่ายค่าจ้าง</th><th>สถานะ</th><th>รับงานเมื่อ</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="jobTableBody"></tbody>
+        <tfoot id="jobTableFoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── PANEL: RIDER WAGES (per dorm) ── -->
+  <section id="panelWages" class="panel" hidden>
+    <div class="page-head">
+      <h1>ค่าจ้างไรเดอร์ (ตามหอพัก)</h1>
+    </div>
+    <p class="field-hint" style="margin-bottom:16px;">
+      ค่าจ้างที่ร้านจ่ายให้ไรเดอร์ต่อ 1 งานส่ง แยกตามหอพัก/คอนโด แก้ตัวเลขแล้วบันทึกอัตโนมัติ
+      — ค่านี้จะถูกบันทึกลงออเดอร์ตอนลูกค้าสั่ง และใช้เป็นค่าจ้างตอนส่งงานให้ไรเดอร์
+      (หอพักเพิ่ม/ลบได้ที่หน้า ตั้งค่าร้าน)
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>หอพัก / คอนโด</th>
+            <th class="num" style="width:150px;">ค่าส่งลูกค้า</th>
+            <th class="num" style="width:170px;">ค่าจ้างไรเดอร์ (บาท)</th>
+          </tr>
+        </thead>
+        <tbody id="wageTableBody">
+          <tr><td colspan="3" class="empty">กำลังโหลด…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- ══════════════════════════════════════════════ RIDER MODAL -->
+<div class="modal-overlay" id="riderModal">
+  <div class="modal">
+    <h2 id="riderModalTitle">เพิ่มไรเดอร์</h2>
+    <input type="hidden" id="riderId" />
+    <div class="form-field">
+      <label>ชื่อ *</label>
+      <input type="text" id="riderName" placeholder="ชื่อไรเดอร์" />
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>เบอร์โทร</label>
+        <input type="text" id="riderPhone" placeholder="08x-xxx-xxxx" />
+      </div>
+      <div class="form-field">
+        <label>LINE ID</label>
+        <input type="text" id="riderLine" placeholder="(ไม่บังคับ)" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label>รถ / ทะเบียน</label>
+      <input type="text" id="riderVehicle" placeholder="เช่น Honda Wave / กข 1234" />
+    </div>
+    <div class="form-field">
+      <label>หมายเหตุ</label>
+      <textarea id="riderNote" placeholder="(ไม่บังคับ)"></textarea>
+    </div>
+    <div class="form-field switch-row">
+      <input type="checkbox" id="riderActive" checked />
+      <label for="riderActive" style="margin:0;">พร้อมรับงาน (active)</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('riderModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveRider()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ JOB MODAL -->
+<div class="modal-overlay" id="jobModal">
+  <div class="modal">
+    <h2>บันทึกงานส่ง</h2>
+    <input type="hidden" id="jobOrderId" />
+    <div class="inline-load">
+      <div class="form-field">
+        <label>ดึงจากเลขออเดอร์</label>
+        <input type="text" id="jobOrderNo" placeholder="ORD-1234" />
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="fillFromOrder()" style="height:42px;">ดึงข้อมูล</button>
+    </div>
+    <div class="field-hint" id="jobLoadHint" style="margin-bottom:14px;">พิมพ์เลขออเดอร์แล้วกด "ดึงข้อมูล" เพื่อเติมลูกค้า/ที่อยู่ให้อัตโนมัติ — หรือกรอกเองด้านล่าง</div>
+
+    <div class="form-field">
+      <label>ไรเดอร์ *</label>
+      <select id="jobRider"><option value="">— เลือกไรเดอร์ —</option></select>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>ชื่อลูกค้า</label>
+        <input type="text" id="jobCustomer" />
+      </div>
+      <div class="form-field">
+        <label>เบอร์ลูกค้า</label>
+        <input type="text" id="jobPhone" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label>สถานที่ส่ง</label>
+      <input type="text" id="jobAddress" placeholder="ที่อยู่ / จุดส่ง" />
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>หอพัก / จุดหมาย</label>
+        <input type="text" id="jobDropoff" placeholder="เช่น Kave TU" />
+      </div>
+      <div class="form-field">
+        <label>ระยะทาง (กม.)</label>
+        <input type="number" id="jobDistance" step="0.1" min="0" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>ค่าส่งจ่ายไรเดอร์ (฿) *</label>
+        <input type="number" id="jobFee" step="1" min="0" value="0" />
+      </div>
+      <div class="form-field">
+        <label>สถานะ</label>
+        <select id="jobStatus">
+          <option value="assigned">มอบหมายแล้ว</option>
+          <option value="accepted">รับงานแล้ว</option>
+          <option value="delivered">ส่งสำเร็จ</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-field">
+      <label>หมายเหตุ</label>
+      <textarea id="jobNote" placeholder="(ไม่บังคับ)"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('jobModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveJob()">บันทึกงาน</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── SIDEBAR ──
+  function openSidebar()  { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebarBackdrop').classList.add('show'); document.body.style.overflow = 'hidden'; }
+  function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarBackdrop').classList.remove('show'); document.body.style.overflow = ''; }
+
+  // ── HELPERS ──
+  const $ = id => document.getElementById(id);
+  function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('th-TH', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }); }
+  function fmtBaht(n) { const v = Number(n) || 0; return '฿' + v.toLocaleString('en-US'); }
+  function showToast(msg, isError = false) { const el = $('toast'); el.textContent = msg; el.classList.toggle('error', isError); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2800); }
+  function closeModal(id) { $(id).classList.remove('show'); }
+  async function copyText(str) {
+    try { await navigator.clipboard.writeText(str); return true; }
+    catch (e) {
+      try { const t = document.createElement('textarea'); t.value = str; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); return true; }
+      catch (e2) { return false; }
+    }
+  }
+  const STATUS_LABEL = { open:'รอไรเดอร์รับ', assigned:'มอบหมายแล้ว', accepted:'รับงานแล้ว', picked_up:'รับของแล้ว', delivered:'ส่งสำเร็จ', cancelled:'ยกเลิก' };
+
+  // ── STATE ──
+  let riders = [];
+  let jobs = [];
+  let wageZones = [];   // delivery_zones rows for the wage editor
+
+  // ── TABS ──
+  function switchTab(name) {
+    $('tabBtnRiders').classList.toggle('active', name === 'riders');
+    $('tabBtnJobs').classList.toggle('active',   name === 'jobs');
+    $('tabBtnWages').classList.toggle('active',  name === 'wages');
+    $('panelRiders').hidden = name !== 'riders';
+    $('panelJobs').hidden   = name !== 'jobs';
+    $('panelWages').hidden  = name !== 'wages';
+    if (name === 'wages') loadWageRates();
+  }
+
+  // ══════════════════════ RIDER WAGES (per dorm) ══════════════════════
+  async function loadWageRates() {
+    const { data, error } = await supabase
+      .from('delivery_zones')
+      .select('id, name, customer_pay, rider_gain, is_active, sort_order')
+      .order('sort_order', { ascending: true });
+    if (error) {
+      $('wageTableBody').innerHTML =
+        '<tr><td colspan="3" class="empty">โหลดไม่สำเร็จ: ' + escHtml(error.message) + '</td></tr>';
+      return;
+    }
+    wageZones = data || [];
+    renderWageRates();
+  }
+
+  function renderWageRates() {
+    const tb = $('wageTableBody');
+    if (!wageZones.length) {
+      tb.innerHTML = '<tr><td colspan="3" class="empty">ยังไม่มีหอพัก — เพิ่มได้ที่หน้า ตั้งค่าร้าน</td></tr>';
+      return;
+    }
+    tb.innerHTML = wageZones.map(z =>
+      '<tr' + (z.is_active ? '' : ' style="opacity:.5"') + '>' +
+        '<td>' + escHtml(z.name) + '</td>' +
+        '<td class="num">' + fmtBaht(z.customer_pay) + '</td>' +
+        '<td class="num"><input type="number" min="0" step="1" value="' + z.rider_gain +
+          '" onchange="updateRiderGain(\'' + z.id + '\', this.value)"' +
+          ' style="width:100px;text-align:center;padding:6px 8px;border:1.5px solid var(--border);' +
+          'border-radius:var(--radius-sm);font-family:inherit;font-size:var(--text-sm);"></td>' +
+      '</tr>'
+    ).join('');
+  }
+
+  async function updateRiderGain(id, raw) {
+    const val = parseFloat(raw);
+    if (isNaN(val) || val < 0) { showToast('ค่าจ้างไม่ถูกต้อง', true); loadWageRates(); return; }
+    const { error } = await supabase.from('delivery_zones').update({ rider_gain: val }).eq('id', id);
+    if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message, true); return; }
+    const z = wageZones.find(z => z.id === id); if (z) z.rider_gain = val;
+    showToast('บันทึกค่าจ้าง ' + fmtBaht(val) + ' เรียบร้อย');
+  }
+
+  // ══════════════════════════ RIDERS ══════════════════════════
+  async function loadRiders() {
+    const { data, error } = await supabase.from('riders').select('*').order('created_at', { ascending: true });
+    if (error) { showToast('โหลดไรเดอร์ไม่สำเร็จ: ' + error.message, true); return; }
+    riders = data || [];
+    renderRiders();
+    populateRiderSelects();
+  }
+
+  function renderRiders() {
+    const active = riders.filter(r => r.is_active).length;
+    $('riderSummary').innerHTML =
+      `<div class="summary-chip"><div class="lbl">ไรเดอร์ทั้งหมด</div><div class="val">${riders.length}</div></div>` +
+      `<div class="summary-chip"><div class="lbl">พร้อมรับงาน</div><div class="val accent">${active}</div></div>`;
+
+    if (!riders.length) { $('riderGrid').innerHTML = `<div class="empty">ยังไม่มีไรเดอร์ — กด "＋ เพิ่มไรเดอร์" เพื่อเริ่ม</div>`; return; }
+
+    $('riderGrid').innerHTML = riders.map(r => {
+      const badge = r.is_active ? '<span class="badge badge-active">พร้อมรับงาน</span>' : '<span class="badge badge-inactive">พัก</span>';
+      const phone = r.phone ? `<a href="tel:${escHtml(r.phone)}">${escHtml(r.phone)}</a>` : '—';
+      const meta = [
+        `📞 ${phone}`,
+        r.line_id ? `LINE: ${escHtml(r.line_id)}` : '',
+        r.vehicle ? `🛵 ${escHtml(r.vehicle)}` : '',
+        r.note ? `📝 ${escHtml(r.note)}` : ''
+      ].filter(Boolean).join('<br>');
+      return `<div class="rider-card">
+        <div class="rc-top">
+          <div class="rc-avatar">🛵</div>
+          <div style="flex:1;min-width:0;"><div class="rc-name">${escHtml(r.name)}</div>${badge}</div>
+        </div>
+        <div class="rc-meta">${meta}</div>
+        <div class="rc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="copyRiderLink('${r.id}')" title="คัดลอกลิงก์ส่วนตัว (ส่งให้ไรเดอร์ตั้งค่าเครื่องครั้งเดียว)">🔗 ลิงก์</button>
+          <button class="btn btn-ghost btn-sm" onclick="openRiderModal('${r.id}')">แก้ไข</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRider('${r.id}')">ลบ</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openRiderModal(id) {
+    const r = id ? riders.find(x => x.id === id) : null;
+    $('riderModalTitle').textContent = r ? 'แก้ไขไรเดอร์' : 'เพิ่มไรเดอร์';
+    $('riderId').value    = r ? r.id : '';
+    $('riderName').value  = r ? (r.name || '') : '';
+    $('riderPhone').value = r ? (r.phone || '') : '';
+    $('riderLine').value  = r ? (r.line_id || '') : '';
+    $('riderVehicle').value = r ? (r.vehicle || '') : '';
+    $('riderNote').value  = r ? (r.note || '') : '';
+    $('riderActive').checked = r ? !!r.is_active : true;
+    $('riderModal').classList.add('show');
+    $('riderName').focus();
+  }
+
+  async function saveRider() {
+    const name = $('riderName').value.trim();
+    if (!name) { showToast('กรุณากรอกชื่อไรเดอร์', true); $('riderName').focus(); return; }
+    const payload = {
+      name,
+      phone:   $('riderPhone').value.trim() || null,
+      line_id: $('riderLine').value.trim() || null,
+      vehicle: $('riderVehicle').value.trim() || null,
+      note:    $('riderNote').value.trim() || null,
+      is_active: $('riderActive').checked,
+      updated_at: new Date().toISOString()
+    };
+    const id = $('riderId').value;
+    const q = id
+      ? supabase.from('riders').update(payload).eq('id', id)
+      : supabase.from('riders').insert(payload);
+    const { error } = await q;
+    if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message, true); return; }
+    closeModal('riderModal');
+    showToast(id ? 'อัปเดตไรเดอร์แล้ว' : 'เพิ่มไรเดอร์แล้ว');
+    await loadRiders();
+  }
+
+  function copyRiderLink(id) {
+    const r = riders.find(x => x.id === id);
+    if (!r) return;
+    if (!r.claim_token) { showToast('ไรเดอร์นี้ยังไม่มี token — รัน migration 025 ก่อน', true); return; }
+    const link = location.origin + '/r.html?setup=' + r.claim_token;
+    copyText(link).then(ok => showToast(ok ? 'คัดลอกลิงก์ส่วนตัวของ ' + r.name + ' แล้ว — ส่งให้ไรเดอร์ทาง LINE ส่วนตัว' : 'คัดลอกไม่สำเร็จ', !ok));
+  }
+
+  async function deleteRider(id) {
+    const r = riders.find(x => x.id === id);
+    if (!confirm(`ลบไรเดอร์ "${r ? r.name : ''}" ?\n(ประวัติงานเก่าจะยังอยู่ แต่จะไม่ผูกกับไรเดอร์นี้)`)) return;
+    const { error } = await supabase.from('riders').delete().eq('id', id);
+    if (error) { showToast('ลบไม่สำเร็จ: ' + error.message, true); return; }
+    showToast('ลบไรเดอร์แล้ว');
+    await loadRiders();
+  }
+
+  function populateRiderSelects() {
+    const active = riders.filter(r => r.is_active);
+    $('jobRider').innerHTML = '<option value="">— เลือกไรเดอร์ —</option>' +
+      active.map(r => `<option value="${r.id}">${escHtml(r.name)}</option>`).join('');
+    $('filterRider').innerHTML = '<option value="">ไรเดอร์ทั้งหมด</option>' +
+      riders.map(r => `<option value="${r.id}">${escHtml(r.name)}</option>`).join('');
+  }
+
+  // ══════════════════════════ JOBS ══════════════════════════
+  async function loadJobs() {
+    const { data, error } = await supabase
+      .from('rider_jobs')
+      .select('*, rider:riders(name, phone)')
+      .order('assigned_at', { ascending: false });
+    if (error) { showToast('โหลดประวัติงานไม่สำเร็จ: ' + error.message, true); return; }
+    jobs = data || [];
+    renderJobs();
+  }
+
+  // local YYYY-MM-DD for date-range filtering (matches <input type="date">)
+  function localDateStr(d) {
+    if (!d) return '';
+    const dt = new Date(d);
+    return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+  }
+
+  function clearJobFilters() {
+    ['filterRider', 'filterStatus', 'filterPaid', 'filterFrom', 'filterTo', 'filterSearch'].forEach(id => $(id).value = '');
+    renderJobs();
+  }
+
+  function renderJobs() {
+    const fRider  = $('filterRider').value;
+    const fStatus = $('filterStatus').value;
+    const fPaid   = $('filterPaid').value;
+    const fFrom   = $('filterFrom').value;
+    const fTo     = $('filterTo').value;
+    const fSearch = $('filterSearch').value.trim().toLowerCase();
+
+    let rows = jobs.filter(j => {
+      if (fRider && j.rider_id !== fRider) return false;
+      if (fStatus && j.status !== fStatus) return false;
+      if (fPaid === 'paid'   && !j.rider_paid) return false;
+      if (fPaid === 'unpaid' &&  j.rider_paid) return false;
+      if (fFrom || fTo) {
+        const d = localDateStr(j.assigned_at);
+        if (fFrom && d < fFrom) return false;
+        if (fTo   && d > fTo)   return false;
+      }
+      if (fSearch) {
+        const hay = `${j.order_no || ''} ${j.customer_name || ''} ${j.delivery_address || ''} ${j.dropoff_label || ''}`.toLowerCase();
+        if (!hay.includes(fSearch)) return false;
+      }
+      return true;
+    });
+
+    // summary from filtered set
+    const delivered = rows.filter(j => j.status === 'delivered').length;
+    const feeSum    = rows.reduce((s, j) => s + (Number(j.rider_fee) || 0), 0);
+    const paidSum   = rows.filter(j => j.rider_paid).reduce((s, j) => s + (Number(j.rider_fee) || 0), 0);
+    const unpaidSum = feeSum - paidSum;
+    $('jobSummary').innerHTML =
+      `<div class="summary-chip"><div class="lbl">งานทั้งหมด</div><div class="val">${rows.length}</div></div>` +
+      `<div class="summary-chip"><div class="lbl">ส่งสำเร็จ</div><div class="val">${delivered}</div></div>` +
+      `<div class="summary-chip"><div class="lbl">ค่าจ้างรวม</div><div class="val">${fmtBaht(feeSum)}</div></div>` +
+      `<div class="summary-chip"><div class="lbl">ค้างจ่ายไรเดอร์</div><div class="val accent">${fmtBaht(unpaidSum)}</div></div>`;
+
+    const foot = $('jobTableFoot');
+    if (!rows.length) {
+      $('jobTableBody').innerHTML = `<tr><td colspan="10"><div class="empty">ยังไม่มีงานที่ตรงเงื่อนไข</div></td></tr>`;
+      if (foot) foot.innerHTML = '';
+      return;
+    }
+
+    $('jobTableBody').innerHTML = rows.map(j => {
+      const riderName = j.rider ? escHtml(j.rider.name) : '<span style="color:var(--text-muted)">(ลบแล้ว)</span>';
+      const addr = escHtml(j.dropoff_label || j.delivery_address || '—');
+      const canAccept    = j.status === 'assigned';
+      const canDeliver   = j.status !== 'delivered' && j.status !== 'cancelled';
+      const paidBtn = j.rider_paid
+        ? `<button class="pay-toggle paid" title="คลิกเพื่อเปลี่ยนเป็นค้างจ่าย" onclick="toggleRiderPaid('${j.id}')">&#10003; จ่ายแล้ว</button>`
+        : `<button class="pay-toggle unpaid" title="คลิกเพื่อทำเครื่องหมายว่าจ่ายแล้ว" onclick="toggleRiderPaid('${j.id}')">ค้างจ่าย</button>`;
+      return `<tr>
+        <td>${fmtDateTime(j.assigned_at)}</td>
+        <td>${riderName}</td>
+        <td>${escHtml(j.order_no || '—')}</td>
+        <td>${escHtml(j.customer_name || '—')}</td>
+        <td>${addr}</td>
+        <td class="num">${fmtBaht(j.rider_fee)}</td>
+        <td>${paidBtn}</td>
+        <td><span class="badge badge-${j.status}">${STATUS_LABEL[j.status] || j.status}</span></td>
+        <td>${fmtDateTime(j.accepted_at)}</td>
+        <td>
+          <div class="job-actions">
+            ${canAccept  ? `<button class="icon-btn" title="ทำเครื่องหมายรับงาน" onclick="jobAccept('${j.id}')">✅</button>` : ''}
+            ${canDeliver ? `<button class="icon-btn" title="ส่งสำเร็จ" onclick="jobDeliver('${j.id}')">🏁</button>` : ''}
+            <button class="icon-btn" title="คัดลอกข้อความส่งไรเดอร์" onclick="copyDispatch('${j.id}')">📋</button>
+            <button class="icon-btn danger" title="ลบ" onclick="deleteJob('${j.id}')">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    if (foot) {
+      foot.innerHTML = `<tr>
+        <td colspan="5" class="foot-label">รวมค่าจ้าง (ตามตัวกรอง)</td>
+        <td class="num">${fmtBaht(feeSum)}</td>
+        <td colspan="4" style="font-weight:600;color:var(--text-secondary);">ค้างจ่าย ${fmtBaht(unpaidSum)} · จ่ายแล้ว ${fmtBaht(paidSum)}</td>
+      </tr>`;
+    }
+  }
+
+  async function toggleRiderPaid(id) {
+    const j = jobs.find(x => x.id === id);
+    if (!j) return;
+    const next  = !j.rider_paid;
+    const stamp = next ? new Date().toISOString() : null;
+    const { error } = await supabase.from('rider_jobs')
+      .update({ rider_paid: next, rider_paid_at: stamp }).eq('id', id);
+    if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message, true); return; }
+    j.rider_paid = next; j.rider_paid_at = stamp;
+    renderJobs();
+    showToast(next ? 'ทำเครื่องหมายจ่ายค่าจ้างแล้ว' : 'เปลี่ยนเป็นค้างจ่าย');
+  }
+
+  function openJobModal() {
+    $('jobOrderId').value = '';
+    $('jobOrderNo').value = '';
+    $('jobCustomer').value = '';
+    $('jobPhone').value = '';
+    $('jobAddress').value = '';
+    $('jobDropoff').value = '';
+    $('jobDistance').value = '';
+    $('jobFee').value = '0';
+    $('jobStatus').value = 'assigned';
+    $('jobNote').value = '';
+    $('jobLoadHint').textContent = 'พิมพ์เลขออเดอร์แล้วกด "ดึงข้อมูล" เพื่อเติมลูกค้า/ที่อยู่ให้อัตโนมัติ — หรือกรอกเองด้านล่าง';
+    $('jobLoadHint').style.color = '';
+    if (!riders.filter(r => r.is_active).length) { showToast('ยังไม่มีไรเดอร์ที่ active — เพิ่มไรเดอร์ก่อน', true); }
+    $('jobModal').classList.add('show');
+  }
+
+  async function fillFromOrder() {
+    const no = $('jobOrderNo').value.trim();
+    if (!no) { showToast('กรอกเลขออเดอร์ก่อน', true); return; }
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, order_no, customer_name, customer_phone, customer_address, delivery_fee')
+      .eq('order_no', no)
+      .maybeSingle();
+    if (error) { showToast('ค้นหาไม่สำเร็จ: ' + error.message, true); return; }
+    if (!data) { $('jobLoadHint').textContent = 'ไม่พบออเดอร์นี้ — กรอกข้อมูลเองได้'; $('jobLoadHint').style.color = 'var(--error)'; return; }
+    $('jobOrderId').value = data.id;
+    $('jobOrderNo').value = data.order_no || no;
+    $('jobCustomer').value = data.customer_name || '';
+    $('jobPhone').value = data.customer_phone || '';
+    $('jobAddress').value = data.customer_address || '';
+    if (data.delivery_fee != null) $('jobFee').value = data.delivery_fee;
+    $('jobLoadHint').textContent = '✓ ดึงข้อมูลออเดอร์ ' + (data.order_no || no) + ' แล้ว — ค่าส่งเป็นค่าที่ลูกค้าจ่าย ปรับเป็นค่าจ้างไรเดอร์ได้';
+    $('jobLoadHint').style.color = 'var(--brown-mid)';
+  }
+
+  async function saveJob() {
+    const riderId = $('jobRider').value;
+    if (!riderId) { showToast('กรุณาเลือกไรเดอร์', true); return; }
+    const status = $('jobStatus').value;
+    const nowISO = new Date().toISOString();
+    const payload = {
+      rider_id: riderId,
+      order_id: $('jobOrderId').value || null,
+      order_no: $('jobOrderNo').value.trim() || null,
+      customer_name: $('jobCustomer').value.trim() || null,
+      customer_phone: $('jobPhone').value.trim() || null,
+      delivery_address: $('jobAddress').value.trim() || null,
+      dropoff_label: $('jobDropoff').value.trim() || null,
+      distance_km: $('jobDistance').value ? Number($('jobDistance').value) : null,
+      rider_fee: Number($('jobFee').value) || 0,
+      status,
+      note: $('jobNote').value.trim() || null,
+      // stamp timestamps to match the chosen status
+      accepted_at:  (status === 'accepted' || status === 'delivered') ? nowISO : null,
+      delivered_at: (status === 'delivered') ? nowISO : null
+    };
+    const { error } = await supabase.from('rider_jobs').insert(payload);
+    if (error) { showToast('บันทึกงานไม่สำเร็จ: ' + error.message, true); return; }
+    closeModal('jobModal');
+    showToast('บันทึกงานแล้ว');
+    await loadJobs();
+  }
+
+  async function jobAccept(id) {
+    const { error } = await supabase.from('rider_jobs').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', id);
+    if (error) { showToast('อัปเดตไม่สำเร็จ: ' + error.message, true); return; }
+    showToast('ทำเครื่องหมายรับงานแล้ว');
+    await loadJobs();
+  }
+  async function jobDeliver(id) {
+    const j = jobs.find(x => x.id === id);
+    const patch = { status: 'delivered', delivered_at: new Date().toISOString() };
+    if (j && !j.accepted_at) patch.accepted_at = new Date().toISOString();
+    const { error } = await supabase.from('rider_jobs').update(patch).eq('id', id);
+    if (error) { showToast('อัปเดตไม่สำเร็จ: ' + error.message, true); return; }
+    showToast('ทำเครื่องหมายส่งสำเร็จแล้ว');
+    await loadJobs();
+  }
+  async function deleteJob(id) {
+    if (!confirm('ลบบันทึกงานนี้?')) return;
+    const { error } = await supabase.from('rider_jobs').delete().eq('id', id);
+    if (error) { showToast('ลบไม่สำเร็จ: ' + error.message, true); return; }
+    showToast('ลบงานแล้ว');
+    await loadJobs();
+  }
+
+  // Copy a ready-to-send dispatch message (paste into LINE/chat)
+  async function copyDispatch(id) {
+    const j = jobs.find(x => x.id === id);
+    if (!j) return;
+    const lines = [
+      '🛵 งานส่ง Glongnom',
+      j.order_no ? 'ออเดอร์: ' + j.order_no : null,
+      j.customer_name ? 'ลูกค้า: ' + j.customer_name + (j.customer_phone ? ' (' + j.customer_phone + ')' : '') : null,
+      (j.dropoff_label || j.delivery_address) ? 'ส่งที่: ' + (j.dropoff_label ? j.dropoff_label + ' — ' : '') + (j.delivery_address || '') : null,
+      j.distance_km != null ? 'ระยะ: ' + j.distance_km + ' กม.' : null,
+      'ค่าส่ง: ' + fmtBaht(j.rider_fee),
+      j.note ? 'หมายเหตุ: ' + j.note : null,
+      j.accept_token ? 'กดรับงาน: ' + location.origin + '/r.html?job=' + j.accept_token : null
+    ].filter(Boolean);
+    const ok = await copyText(lines.join('\n'));
+    showToast(ok ? 'คัดลอกข้อความส่งไรเดอร์แล้ว — วางใน LINE ได้เลย' : 'คัดลอกไม่สำเร็จ', !ok);
+  }
+
+  // ── INIT ──
+  (async function init() {
+    const profile = await Auth.require(['admin', 'manager', 'cashier']);
+    if (!profile) return;
+    $('sidebarUserInfo').textContent = (profile.name || profile.email || 'Staff') + (profile.role ? ' · ' + profile.role : '');
+    await loadRiders();
+    await loadJobs();
+  })();
+</script>
+</body>
+</html>

@@ -1815,3 +1815,687 @@ Supabase Webhook (INSERT orders) → Netlify Function → Telegram Bot API (grou
 | `netlify/functions/telegram-notify.js` | New — Telegram order-notification function |
 | `netlify.toml` | Registered telegram-notify function |
 
+---
+
+---
+
+# Rider Delivery System — Pricing Model, Registry & Self-Accept Dispatch
+**Session Date:** 2026-07-13
+**Scope:** Stand up an in-house delivery operation to cut dependence on LINE MAN — a model for what to pay riders, a rider registry + job-history admin page (Phase 1), and a public "tap-to-accept" dispatch flow driven from the order queue (Phase 2).
+
+---
+
+## Why
+
+LINE MAN / Grab take ~30% GP per order and own the customer relationship. Glongnom sits opposite Thammasat Rangsit (Dcondo Dome) with ~60% of orders within 0–3 km and ~40% within 3–5 km — a tight, campus-dense radius where an in-house rider running clustered short trips earns a good ฿/hr while costing the shop far less than platform GP. This session built both the pricing rationale and the operational tooling.
+
+```
+Order queue → [🛵 Rider] → OPEN rider_job + link /r.html?job=<token>
+   → paste in LINE group → registered rider taps รับงาน (first wins, atomic)
+   → picked_up → delivered  (each auto-stamped)
+```
+
+## Part 0 — Delivery pricing model (planning tool)
+
+Benchmarked real LINE MAN rider pay (green zone = Pathum Thani/Rangsit ≈ 37฿ base 2566, cut to ~28฿ Apr 2025; +~7฿/km beyond 2 km; batch add-on ~15–17฿; rates falling for years). Derived an **all-win** pricing identity:
+
+> `price = 2·(food cost) + 2·(rider_fee − customer_fee) / (cups per order)`
+
+Decisive lever = **basket size**; single-cup delivery is the margin killer. A 2-cup / ฿120 minimum + free delivery ≥ ฿250 closes the math so shop (50% contribution margin), customer (≤15฿ delivery), and rider (~app rate) all win.
+
+- Recommended rider pay: **base 25฿ (incl. first 3 km) + 6฿/km beyond 3 km + time/weather bonus**.
+- Customer fee tiers: **0–1 km = 10฿ · 1–3 km = 15฿ · 3 km+ = 20฿**.
+- `rider-pay-calculator.html` (repo root) — standalone interactive calculator; per-dorm pay/fee table (11 real TU-Rangsit dorms, editable, auto-distance via Haversine, localStorage + CSV import/export) + a Margin & Basket tab. **Planning tool only — not wired to the app DB.**
+
+## Part 1 — Rider registry + job history (admin · migration 024)
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `riders` table | name, phone, line_id, vehicle, is_active, note |
+| 2 | `rider_jobs` table | rider_id, order_id + order snapshot (order_no, customer, address, dropoff_label, distance_km), `rider_fee`, status, assigned/accepted/delivered timestamps, `accept_token` |
+| 3 | `admin/rider.html` | 2 tabs — **ไรเดอร์** (CRUD cards) + **ประวัติการรับงาน** (job log w/ filters, summary incl. total rider fees). Job modal "ดึงจากเลขออเดอร์" prefills from `orders`. Per-job: mark accepted / delivered, copy dispatch text, delete |
+| 4 | Sidebar nav | Added `🛵 Riders` link to all 13 other admin pages |
+
+RLS mirrors migration 006: read = any authenticated user; write = staff (admin/manager/cashier).
+
+## Part 2 — Public self-accept dispatch (migration 025)
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `riders.claim_token` | Secret per-rider identity (128-bit). Device remembers it via a one-time personal link `/r.html?setup=<claim_token>` |
+| 2 | `rider_jobs` — `open` status + `picked_up_at` | New broadcast status for unclaimed dispatches |
+| 3 | 4 SECURITY DEFINER RPCs (granted to `anon`) | `get_rider_identity`, `get_rider_job` (need-to-know info incl. menu items + assigned_at, **no pricing/payment**), `claim_rider_job` (atomic first-come via `UPDATE … WHERE status='open'`), `update_rider_job_status` (owner-only) |
+| 4 | `r.html` (repo root, public, no login) | Rider job page. Emphasises **order no / route (รับ→ส่ง) / ค่ารอบ**, plus menu+qty, customer, status, and a live count-up **timer** from `assigned_at` until accepted. Handles `?setup=` and `?job=` |
+| 5 | `admin/orders.html` | **🛵 Rider** button on each delivery order card → creates/reuses an OPEN job and auto-copies the LINE-ready link |
+| 6 | `admin/rider.html` | Per-rider **🔗 ลิงก์** copies the personal setup link; dispatch text now includes the accept link; `open` status label/badge/filter |
+
+## Identity & security design
+
+- **No rider login.** Each rider's device stores their secret `claim_token` (localStorage) after opening their personal setup link once. Every accept/status call carries that token → the server always knows *which registered rider* acted, and rejects any token that isn't a registered active rider.
+- **All public writes go through SECURITY DEFINER RPCs** (like `create_order` in 021) — the anon key never touches these tables directly; every RPC is gated on knowing a 128-bit token.
+- **Atomic claim:** `UPDATE rider_jobs SET … WHERE accept_token=? AND status='open'` — concurrent second claim serialises on the row, sees status ≠ open, returns `already_taken`. First rider wins.
+- `get_rider_job` exposes only delivery-relevant fields to token holders (customer name/phone/address + menu) — deliberately no totals/payment/margins.
+
+## Activation Steps (manual, owner-side)
+
+1. **Run migrations in order** in Supabase SQL Editor: `024_riders.sql`, then `025_rider_accept.sql` (safe to re-run — 025 is idempotent and DROP/recreates `get_rider_job`).
+2. **Deploy** (drag-and-drop) — see Files Changed below.
+3. **Test flow:** add a rider → **🔗 ลิงก์** → open on rider phone (setup, device remembers) → order queue **🛵 Rider** on a delivery order → open the job link on that phone → **รับงาน** → รับของ → ส่งสำเร็จ.
+
+## Not yet done (Phase 3 ideas)
+
+- Auto-compute `rider_fee` from distance at dispatch (currently defaults to the order's customer `delivery_fee`).
+- Auto-notify the rider LINE group when a new job is dispatched (reuse the `telegram-notify.js` webhook pattern).
+- Pull the pickup label from the `shops` table instead of the hardcoded `PICKUP` const in `r.html`.
+- Phase 2 identity hardening if needed (LINE Login/LIFF) — deferred; device-claim chosen for zero external setup.
+
+## Files Changed This Session
+
+| File | Type of Change |
+|---|---|
+| `supabase/migrations/024_riders.sql` | New — riders + rider_jobs tables, RLS |
+| `supabase/migrations/025_rider_accept.sql` | New — claim_token, `open` status, 4 self-accept RPCs |
+| `r.html` | New — public rider tap-to-accept page (root) |
+| `admin/rider.html` | New — rider registry + job-history admin page |
+| `admin/orders.html` | Added 🛵 Rider dispatch button + `copyToRider`/`copyText` |
+| `admin/*.html` (13 pages) | Added `🛵 Riders` sidebar nav link |
+| `rider-pay-calculator.html` | New (root) — standalone delivery pricing calculator (planning tool) |
+
+---
+
+# Session Update — 2026-07-15
+**Focus:** Address-based delivery pricing · per-dorm rider wages · rider payout tracking · orders workflow tweaks · free-delivery promo
+
+Six connected pieces of work this session. **Migrations must be run in order: 026 → 027 → 028 → 029 → 030.** Then redeploy the changed files (manual drag-and-drop to Netlify — the git repo is not the deploy source).
+
+## Part 1 — Per-dorm delivery fee (migrations 026, 027)
+
+Replaced the single flat delivery fee (`shops.delivery_fee`) with **per-dorm rates** sourced from `glongnom-dorms.csv`. Because pricing is server-authoritative (`create_order` RPC), the rate card lives in the DB so the browser and the RPC read the same numbers.
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `026_delivery_zones.sql` | New `delivery_zones(name, customer_pay, is_active, sort_order)` table — anon read / admin+manager write. Seeded from the CSV (45 dorms, tiers 10/15/20฿). Re-runnable via `ON CONFLICT`. |
+| 2 | `027_create_order_dorm_fee.sql` | `create_order` now reads `customer.dorm` from the payload, looks up the fee in `delivery_zones`, and **rejects** any dorm not in the table (`INVALID_DELIVERY_ZONE`) — same defense-in-depth as menu/option validation. |
+| 3 | `index.html` checkout | The single address box became **two fields**: a required `<select>` dorm dropdown (locked to the CSV list) + a free-text box for building/floor/room. Fee recomputes live on dorm change; payload sends `dorm` separately; combined `"Dorm — detail"` stored as `customer_address`. |
+
+## Part 2 — Admin delivery-rate manager (Settings tab)
+
+Deleted the flat delivery-fee setting; replaced with a **per-dorm manager** in `admin/index.html` → ตั้งค่าร้าน:
+- Table of dorms with inline **fee auto-save** on change, **show/hide** checkbox (`is_active`), and **delete**.
+- **"+ เพิ่มหอใหม่"** row to add a dorm (name + fee); blocks blanks/dupes.
+- Reads/writes `delivery_zones` directly (admin/manager RLS). `shops.delivery_fee` is now unused (column left in place, harmless).
+
+## Part 3 — Per-dorm rider wage `rider_gain` (migration 028)
+
+Decoupled the rider's wage from the customer's delivery fee. **Previously** `admin/orders.html` set `rider_fee = order.delivery_fee` (rider paid = customer fee). **Now** each dorm has its own wage.
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `028_rider_gain.sql` | Adds `rider_gain` to `delivery_zones` and a **snapshot** `rider_gain` to `orders`. `create_order` records the dorm's wage on each order at order time (rider_gain is a **shop cost — NOT added to the customer total**). Seeded real wages from `glongnom-dorms.csv` (`rider_gain` column, tiers 20/25/30/40/45฿) via a re-runnable name-matched UPDATE. |
+| 2 | `admin/rider.html` | New **"💰 ค่าจ้างไรเดอร์"** tab — per-dorm rider wage editor (auto-save), customer fee shown for reference. |
+| 3 | `admin/orders.html` | Dispatch now sets `rider_fee = order.rider_gain \|\| order.delivery_fee \|\| 0` (fallback covers orders placed before 028). Also fills `dropoff_label` with the dorm name. |
+
+Note: rider wage is **not** a straight function of the customer fee — e.g. Golf view / Keystone charge the customer 15฿ but pay the rider 30฿. Decoupling was necessary.
+
+## Part 4 — Rider payout tracking + job-history filters (migration 029)
+
+`admin/rider.html` → **ประวัติการรับงาน** tab enhanced:
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `029_rider_job_payout.sql` | Adds `rider_jobs.rider_paid` (bool) + `rider_paid_at`. Internal bookkeeping — deliberately **not** exposed via the public rider RPCs. |
+| 2 | Date filter | ตั้งแต่/ถึง date pickers (on `assigned_at`, local-date compare) + paid/unpaid filter + "ล้างตัวกรอง". |
+| 3 | Wage subtotal | Summary chips show **ค่าจ้างรวม** + **ค้างจ่ายไรเดอร์** (outstanding); a `<tfoot>` totals the wage column for the current filter. |
+| 4 | Paid/unpaid column | New **"จ่ายค่าจ้าง"** column with a one-click toggle (ค้างจ่าย ⇄ ✓ จ่ายแล้ว), stamps `rider_paid_at`. Table is now 10 columns. |
+
+This "shop pays rider" flag is separate from the customer-payment toggle in Part 5 — independent on purpose.
+
+## Part 5 — `admin/orders.html` workflow tweaks
+
+| # | Change | Detail |
+|---|---|---|
+| 1 | Rider button turns green after copy | After copying the dispatch link, the 🛵 Rider button flips to green **"✓ ส่งไรเดอร์แล้ว"** (resets on next data reload) so staff see which orders were dispatched. |
+| 2 | Double-confirm cancel | The ✕ cancel button now calls `cancelOrder()` → **two** confirm prompts (both show the order no) before cancelling. |
+| 3 | Payment temporarily disabled | New flag `const AUTO_MARK_PAID = true;` — every unpaid order that loads is auto-marked paid + income recorded (guarded against double-firing). **Flip to `false` to restore manual Unpaid→Paid.** Client-side (runs while the orders page is open). |
+
+## Part 6 — Free-delivery promotion (migration 030)
+
+New third promo type. When active and the order has ≥ `min_qty` cups, the **customer's delivery fee → 0**. **`rider_gain` is untouched — the shop absorbs the delivery cost** (rider still paid in full).
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | `030_free_delivery_promo.sql` | Adds `free_delivery` promo type + `promotions.min_qty` (default threshold 2). `create_order` counts total cups and zeroes `v_delivery_fee` only when an active free-delivery promo's threshold is met. |
+| 2 | Admin `index.html` promo tab | New **"🚛 ส่งฟรี"** type with a "ส่งฟรีเมื่อซื้อครบ N แก้ว" field; menu picker hidden (order-wide). Green promo badge. |
+| 3 | Customer `index.html` | `FREE_DELIVERY`/`totalCupCount()`/`freeDeliveryActive()`; cart, drawer, and floating total show the delivery fee struck-through → **"ฟรี / FREE"**. Browser preview mirrors the server rule exactly. |
+
+Cup count = total item qty (any menu counts, incl. rice bowls).
+
+## Activation Steps (manual, owner-side)
+
+1. **Run migrations in Supabase SQL Editor, in order:** `026_delivery_zones.sql` → `027_create_order_dorm_fee.sql` → `028_rider_gain.sql` → `029_rider_job_payout.sql` → `030_free_delivery_promo.sql`.
+2. **Deploy (drag-and-drop)** the changed files below.
+3. Set real delivery/rider rates in admin if needed (Settings tab for customer fees, rider.html ค่าจ้างไรเดอร์ tab for wages), and create a "ส่งฟรี" promo in the โปรโมชัน tab.
+
+## Open follow-ups (offered, not yet built)
+
+- Customer-facing banner "🚛 สั่งครบ 2 แก้ว ส่งฟรี!" to advertise the promo before ordering (lifts basket size).
+- Auto-fill rider fee from `rider_gain` in the *manual* "บันทึกงาน" job form.
+- Rider's total outstanding shown on their card in the ไรเดอร์ tab.
+- Move auto-mark-paid into the `create_order` RPC if it should apply even when no admin has the orders page open (currently client-side only).
+- "Cups" currently counts all menus; restrict to drinks only if desired.
+
+## Files Changed This Session
+
+| File | Type of Change |
+|---|---|
+| `supabase/migrations/026_delivery_zones.sql` | New — per-dorm delivery rate table, seeded from CSV |
+| `supabase/migrations/027_create_order_dorm_fee.sql` | New — `create_order` resolves + validates fee by dorm |
+| `supabase/migrations/028_rider_gain.sql` | New — per-dorm rider wage + order snapshot; updated `create_order` |
+| `supabase/migrations/029_rider_job_payout.sql` | New — `rider_jobs.rider_paid` / `rider_paid_at` |
+| `supabase/migrations/030_free_delivery_promo.sql` | New — free_delivery promo type + `min_qty`; updated `create_order` |
+| `index.html` | Dorm dropdown + detail box; per-dorm fee; free-delivery display |
+| `admin/index.html` | Delivery-rate manager (Settings); free-delivery promo type in โปรโมชัน |
+| `admin/rider.html` | ค่าจ้างไรเดอร์ wage tab; job-history date filter, wage subtotal, paid/unpaid column |
+| `admin/orders.html` | Dispatch uses `rider_gain`; rider-button recolor; double-confirm cancel; auto-mark-paid flag |
+| `glongnom-dorms.csv` | Added `rider_gain` column (source for the 028 seed) |
+
+---
+
+# Session Update — 2026-08-09
+**Focus:** Customer Survey · letter/mailbox animation · public response wall · Admin moderation
+
+Created a new branded customer-feedback page at `/survey.html`. The page follows the existing Glongnom cream, pink, and brown palette and uses Sarabun + Itim typography.
+
+## Customer Survey UI
+
+- Three optional questions; the customer must answer at least one:
+  1. Food / matcha menu requests
+  2. Deliciousness review
+  3. Private improvement feedback
+- Questions 1 and 2 are compact cards on the first row. Question 3 is a full-width card below them.
+- Each question card has a gentle floating animation with staggered timing.
+- Optional customer display-name field and a branded send button.
+- On successful submission, the form animates into a flying envelope and mailbox, followed by a thank-you card.
+- Responsive mobile layout keeps the form compact and moves the public response section close to the form.
+- Removed the original survey eyebrow, `Dear Glongnom` heading, dotted card borders, and `MATCHA • RICE` tagline during visual refinement.
+
+## Public response wall
+
+- Default tab is **รีวิวความอร่อย**; customers can switch to **เมนูที่อยากกิน**.
+- Approved responses appear as small floating paper notes with staggered motion.
+- Improvement feedback is never rendered publicly.
+- New responses are hidden by default and require shop approval before appearing.
+
+## Admin moderation
+
+- When an authenticated user with role `admin` or `manager` opens `/survey.html`, a **มุมจัดการจดหมาย** section appears at the bottom.
+- The shop can independently publish/hide the menu request and review from each response.
+- Controls now clearly say `＋ แสดง...` when private and `✓ กำลังแสดง · กดเพื่อซ่อน` when public.
+- Private improvement feedback is visible to Admin/Manager only and has no public toggle.
+
+## Supabase and privacy
+
+| Migration | Detail |
+|---|---|
+| `032_customer_survey.sql` | Adds `survey_responses`, public anonymous insert, approved-only anonymous reads, Admin/Manager reads and moderation updates, and column-level protection that prevents anonymous clients from selecting `improvement`. |
+| `033_survey_optional_answers.sql` | Makes all three answer columns nullable while enforcing that at least one answer is present. Safe upgrade for a database where migration 032 had already run. |
+
+The live Supabase REST endpoint was verified to return HTTP 200 for public reads and HTTP 201 for a valid insert. A hidden diagnostic row named `system-check` may be removed from Supabase Table Editor.
+
+## Submission bugs fixed
+
+1. Public response loading no longer waits for the Admin session check. Network calls have bounded timeouts and a retry state.
+2. Direct REST submission was tested, then submission was returned to the same Supabase client proven to load Admin history correctly.
+3. The misleading `(network)` fallback was replaced with the real Supabase error code/message.
+4. Fixed the successful-insert animation crash: `event.currentTarget` becomes `null` after an asynchronous `await`, so the form reference is now captured before submission. Animation elements are also null-safe. This bug caused the database insert to succeed while the UI incorrectly reported failure.
+
+## Git / deployment
+
+| Commit | Detail |
+|---|---|
+| `09a0ac3` | Add customer survey and moderation |
+| `8e22351` | Fix survey submission client |
+| `d4dffbc` | Clarify survey moderation controls |
+| `bb72105` | Fix survey success animation |
+
+All commits were pushed to `origin/main`. Netlify must publish commit `bb72105` (or later); after deployment, use a hard refresh or incognito window to avoid the previous cached `survey.html`.
+
+## Files Changed This Session
+
+| File | Type of Change |
+|---|---|
+| `survey.html` | New customer Survey UI, animations, public response wall, Admin moderation, submission and loading fixes |
+| `supabase/migrations/032_customer_survey.sql` | New survey table, RLS policies, privacy-oriented grants |
+| `supabase/migrations/033_survey_optional_answers.sql` | Optional-answer schema upgrade with at-least-one-answer constraint |
+
+---
+
+---
+
+# Customer Membership Card Page
+**Session Date:** 2026-09-02
+**Scope:** New public `membership.html` — phone-gated loyalty card, order history, loyalty ledger, and program rules
+
+---
+
+## Deliverables
+
+| # | Deliverable | Files |
+|---|---|---|
+| 1 | Public membership page — phone gate, card, history, rules | `membership.html` |
+| 2 | Card artwork template (sample data painted out) | `assets/membership-card.png` |
+| 3 | Public lookup RPC — the only anon-reachable path to CRM data | `supabase/migrations/034_membership_lookup.sql` |
+
+**⚠️ Migration 034 must be run manually in the Supabase SQL Editor before the page will work.**
+
+---
+
+## Task 1 — Reproducing the printed card
+
+`Glongnom_Membership_Card.pdf` is a Canva export: a single flattened 1050x600 raster
+image (3.5in x 2in at 300 dpi). There is no live text and no embedded font, so the
+card could not simply be "read" into HTML.
+
+Approach — **original artwork + live text overlay**:
+
+1. Rendered the PDF page to a 1050x600 bitmap.
+2. Painted out the five sample data fields, leaving the artwork untouched:
+   - Left data block — rebuilt with a **Coons patch** interpolated from all four
+     clean edges. A simple row-wise blend left a visible rectangle because the
+     brown background is a radial vignette, not a linear gradient.
+   - Badge text — refilled with flat `#FFCBD6`, on an inner rect kept clear of the
+     rounded corners so the white ring is never clipped.
+3. Saved as `assets/membership-card.png` (32 KB). The arched **Glongnom matcha**
+   wordmark, the pink tier badge, and **membership ♥** are the original pixels.
+4. Live values are drawn as an inline `<svg viewBox="0 0 1050 600">` layered over
+   the image, at coordinates measured off the PDF, so text lands on the original
+   baselines.
+
+### Measured values (1050 x 600 space)
+
+| Element | Value |
+|---|---|
+| Card background | `#47241D` with a subtle radial vignette |
+| Cream text | `#FFEFE4` |
+| Badge pink / ring | `#FFCBD6` / `#FFFFFF` |
+| Badge box | x 585–960, y 225–413, corner radius ~44, 6px white ring |
+| Data line baselines | y = 258, 330, 404 · left edge x = 61 · font-size 44 |
+| Badge line baselines | y = 294, 372 · centred on x = 773 · font-size 48 |
+
+### Fonts
+
+The Canva font is proprietary and was flattened into the bitmap, so it cannot be
+embedded. Closest free substitutes, loaded from Google Fonts:
+
+| Role | Font | Matches |
+|---|---|---|
+| Data lines | `Italiana` | Thin art-nouveau serif, circular bowls, high contrast |
+| Badge lines | `Roboto Slab 700` + grey `paint-order: stroke` | Bold outlined slab serif |
+| Thai fallback | `Sarabun` | Italiana has no Thai glyphs |
+
+`fitCardText()` shrinks any line that would overflow its slot (long names, large
+point totals) and re-runs on `document.fonts.ready` for cold visits.
+
+---
+
+## Task 2 — Public data access (migration 034)
+
+Migration 022 removed the permissive `using (true)` SELECT policies from `orders`
+and `order_items`, and `customers` / `loyalty_ledger` only allow reads when
+`auth.uid() IS NOT NULL`. An anon page therefore **cannot** query those tables —
+by design.
+
+`get_membership(p_phone text)` is a single narrow `SECURITY DEFINER` function
+(same pattern as `create_order` from migration 021) returning one JSON payload:
+
+| Key | Contents |
+|---|---|
+| `customer` | name, phone, member_since, tier, points |
+| `summary` | total_orders, total_spent (both exclude cancelled orders) |
+| `orders` | last 50 orders — order_no, date, status, total, items, points earned |
+| `ledger` | last 50 loyalty ledger rows — delta, reason, note, order_no |
+
+| Detail | Reason |
+|---|---|
+| Phone compared on digits only | Stored values may contain spaces or dashes |
+| Validates `^0\d{9}$` server-side | Same rule as the ordering app |
+| Orders matched on `customer_id` **OR** `customer_phone` | Orders placed before the Phase 3 `customer_id` fix have a null `customer_id` but still carry the phone snapshot |
+| Two expression indexes on normalised phone | Keeps the lookup off a sequential scan |
+| `REVOKE ALL` then `GRANT EXECUTE TO anon, authenticated` | Only the function is exposed, never the tables |
+
+**Privacy trade-off (accepted, worth revisiting):** the phone number is the only
+credential, so the endpoint is enumerable — anyone who knows a customer's number
+can see that customer's name, points, and order history. Acceptable for a small
+shop loyalty card. If that ever matters, gate it behind Supabase phone OTP and
+switch the lookup to `auth.uid()`.
+
+---
+
+## Task 3 — Page layout
+
+| Area | Contents |
+|---|---|
+| **Gate** | Phone input (10 digits), inline validation, friendly not-found state linking to `/` |
+| **Card** | Artwork + live SVG text, "เปลี่ยนเบอร์โทร" to return to the gate |
+| **Stat row** | ออร์เดอร์ทั้งหมด · ยอดใช้จ่ายรวม · คะแนนคงเหลือ |
+| **Tier progress** | Progress bar to the next tier + baht estimate to reach it |
+| **History panel** | Tabs — ประวัติการสั่งซื้อ (items, total, status, points earned) / ประวัติคะแนนสะสม (ledger) |
+| **Rules sidebar** | Earning formula, tier ranges, per-tier perks, reward redemption, fine print |
+
+- Sticky sidebar on desktop; stacks below the card under 980px.
+- Perks and rewards carry a **ยังไม่สรุป** chip since they are not finalised.
+- Rewards show live progress ("อีก 190 คะแนน" / "✓ แลกได้แล้ว") against the
+  customer's actual balance.
+
+### `RULES` config object
+
+All loyalty copy and numbers live in one object at the top of the script — baht
+per point, tier thresholds/colours/perks, and the reward list. Editing that object
+updates the sidebar, the tier table, the progress bar, and the reward list together.
+
+**⚠️ Tier thresholds are duplicated in `accrue_loyalty_for_order()` (migrations 006
+and 009), which is what actually writes `customers.tier`. Change both together.**
+
+---
+
+## Behaviour notes
+
+| Behaviour | Detail |
+|---|---|
+| Phone remembered | Reuses the existing `glongnom_phone` localStorage key set by `index.html` |
+| Prefill vs auto-open | A saved number is prefilled but never auto-opened (shared devices). Only an explicit `?phone=0XXXXXXXXX` link opens the card directly |
+| Card date format | English CE, `16 Aug. 2026` — matches the printed sample exactly |
+| History dates | Thai locale, to match the rest of the page |
+
+---
+
+## Files Changed This Session
+
+| File | Type of Change |
+|---|---|
+| `membership.html` | New public membership card page |
+| `assets/membership-card.png` | New — card artwork with sample data removed |
+| `supabase/migrations/034_membership_lookup.sql` | New — `get_membership()` RPC + normalised-phone indexes |
+
+---
+
+## Revision — Layout + Tier Rule Change
+
+### Page adjustments (`membership.html`)
+
+| # | Change | Detail |
+|---|---|---|
+| 1 | Header removed | The sticky topbar is gone; the card now sits near the top with `padding-top: clamp(20px, 4.5vh, 44px)` on `.wrap` |
+| 2 | Points tile removed | The balance is already on the card itself |
+| 3 | Compact stat strip | ออร์เดอร์ทั้งหมด / ยอดใช้จ่ายรวม / เป้าหมายถัดไป — three tiles in **one row at every width**, divider borders instead of separate cards, with a 6px progress bar underneath. Replaced the old stat row + separate progress panel (~180px tall) with a single ~110px panel |
+| 4 | History collapsed | Tabs replaced with two native `<details>` accordions (ประวัติการสั่งซื้อ, ประวัติคะแนนสะสม), both closed by default, each showing a row count in the summary |
+| 5 | Tier + perks merged | One sidebar card, one row per tier: identity + baht range on the left, perks on the right, split by a dashed border |
+| 6 | Tier by spend | See below |
+| 7 | Card float | `cardFloat` — 6s ease-in-out, ±9px translateY with a 0.22° rotate. The reduced-motion block now also sets `animation-iteration-count: 1` |
+
+Stat tiles and tier ranges use a no-decimal baht format so they fit the narrow
+mobile columns; order totals keep two decimals.
+
+### Tier now follows lifetime spend (migration 035)
+
+Points are a **currency** — redeeming a reward deducts them — so they cannot
+also represent status, or a Gold member who cashes in 500 points gets silently
+demoted. Tier now follows lifetime spend, which only ever grows.
+
+| Tier | Old (points) | New (lifetime spend) |
+|---|---|---|
+| Bronze | 0 – 299 pts | ฿0 – ฿1,499 |
+| Silver | 300 – 999 pts | ฿1,500 – ฿2,999 |
+| Gold | 1,000+ pts | ฿3,000+ |
+
+This had to change at the source, not just in the display, or the customer's
+card and the admin CRM would disagree. Migration `035_tier_by_spend.sql`:
+
+| Step | Change |
+|---|---|
+| 1 | `customers.lifetime_spend numeric(12,2)` added |
+| 2 | `tier_for_spend(numeric)` — the one place the baht thresholds live |
+| 3 | `recalc_customer_tier(uuid)` — sums non-cancelled orders (by `customer_id` **or** phone snapshot) and writes `lifetime_spend` + `tier` |
+| 4 | `accrue_loyalty_for_order` — points logic unchanged; tier recalc moved **outside** the idempotency guard so repeat calls and sub-฿10 orders still refresh the tier |
+| 5 | `adjust_loyalty_points` — **no longer touches tier**. This is the fix |
+| 6 | Backfills every existing customer |
+| 7 | `get_membership` replaced — returns `tier_for_spend(total_spent)` and adds `summary.lifetime_spend` |
+
+`membership.html` also derives the tier client-side from the spend total it
+displays, so the badge on the card can never disagree with the tile beside it.
+
+### Knock-on fix (`admin/customers.html`)
+
+The CRM tier badge reads `customers.tier`, so it follows the new rule
+automatically — but its progress bar was hardcoded to the points thresholds.
+Rewrote it against `totalSpent` with the ฿1,500 / ฿3,000 targets and added a
+`fmtBaht()` helper. Left alone: the manual point-adjust tool, which is still
+correct since points remain the reward currency.
+
+### Run order
+
+1. `034_membership_lookup.sql`
+2. `035_tier_by_spend.sql`
+
+Both are safe to re-run. Remember `assets/membership-card.png` must be included
+in the Netlify drag-and-drop upload.
+
+### Bug fix — rules list sentences fragmenting
+
+`.rules-list li` was `display: flex`, which makes **every inline child its own
+flex item**. A bullet containing `<b>` tags was therefore split into separate
+boxes that wrapped independently:
+
+    ♡ | คะแนน | ใช้แลกของรางวัล · | ระดับสมาชิก | วัดจากยอดใช้จ่ายสะสม...
+
+Replaced the flex row with a hanging indent (`position: relative` +
+`padding-left` on the `li`, absolutely positioned `::before` heart) so inline
+tags stay in the text flow. The points-vs-tier bullet was also split into two
+separate bullets, since it was two distinct rules in one sentence.
+
+Other flex containers on the page (`.order-top`, `.ledger-row`, `.rules-title`,
+`.tp-name`, `.reward-row`, `.acc > summary`) are label/value layout rows whose
+children are single runs by design — checked, none affected.
+
+---
+
+---
+
+# Pre-order System
+**Session Date:** 2026-09-25
+**Scope:** Per-menu pre-order capability, closed-shop ordering for pre-order items, admin pre-order queue
+
+---
+
+## Deliverables (All Complete)
+
+| # | Deliverable | Files |
+|---|---|---|
+| 1 | Schema — `menus.is_preorder` + `orders.is_preorder` columns | `supabase/migrations/037_preorder.sql` |
+| 2 | `create_order` rewrite — pre-order-aware shop-closed guard + order flag | `supabase/migrations/037_preorder.sql` |
+| 3 | Pre-order toggle column (beside Status) + Add/Edit modal checkbox | `admin/index.html` |
+| 4 | Pre-order badge on menu cards + closed-shop ordering for pre-order items | `index.html` |
+| 5 | Branded pre-order confirm pop-up on add-to-cart | `index.html` |
+| 6 | "Pre-order" order queue section (same card, no timer) | `admin/orders.html` |
+
+---
+
+## The Core Problem
+
+Order creation is **server-authoritative** — the browser calls the `create_order`
+RPC (migrations 021/027/030), which recomputes every price and, until now,
+**rejected every order when the shop was closed** (`SHOP_CLOSED`). Feature 2
+("pre-order works while closed") could not be done client-side alone; the RPC
+had to learn the rule.
+
+## Business Rule (confirmed with MM)
+
+| Situation | Behaviour |
+|---|---|
+| Shop **open** | Everything as before. Any order containing ≥1 pre-order item is flagged `is_preorder = true` and shown in the Pre-order queue |
+| Shop **closed** | Order accepted **only if EVERY item is a pre-order item** (`v_all_preorder`). A single normal item still raises `SHOP_CLOSED` |
+| Mixed cart | If ANY item is pre-order → whole order is pre-order (one delivery can't be split) |
+
+## Schema + RPC (migration `037_preorder.sql`)
+
+| Change | Detail |
+|---|---|
+| `menus.is_preorder` | `boolean NOT NULL DEFAULT false` — item may be ordered ahead, stays orderable while closed |
+| `orders.is_preorder` | `boolean NOT NULL DEFAULT false` — set to `v_any_preorder` in the finalize UPDATE |
+| Guard **moved** | The `SHOP_CLOSED` check moved from step 1 to step 6b (after pricing pass 1), because acceptance now depends on cart composition. Raising there aborts the transaction, rolling back the shell + items already inserted |
+| Flags | `v_all_preorder` (AND) and `v_any_preorder` (OR) accumulated per item in pass 1 from `COALESCE(is_preorder, false)` |
+
+Supersedes migration 030's `create_order`. Additive and safe to run.
+
+## Customer App (`index.html`)
+
+| # | Change |
+|---|---|
+| 1 | `MENU` mapping carries `preorder: !!item.is_preorder` |
+| 2 | `🗓 Pre-order` badge top-left of card (drops below the sale ribbon when both apply); amber card border `.is-preorder` |
+| 3 | Add button stays enabled when closed for pre-order items: `isSoldOut \|\| (!SHOP_OPEN && !item.preorder)` |
+| 4 | `openModal` opens pre-order items even while closed |
+| 5 | Branded confirm pop-up (`#preorderModal`) before a pre-order item enters the cart; `confirmAddToCart(preorderConfirmed)` gate |
+| 6 | Cart line shows a small "Pre-order" tag; `cartAllPreorder()` helper mirrors the server rule |
+| 7 | `submitOrder` allows checkout while closed only when `cartAllPreorder()`; load no longer force-disables the submit button |
+
+## Admin Order Queue (`admin/orders.html`)
+
+| # | Change |
+|---|---|
+| 1 | New full-width "Pre-order" section below the live columns; hidden when empty |
+| 2 | `renderAll` splits `orders` into `is_preorder` vs active; live columns render active only |
+| 3 | `renderCard(order, opts)` — `opts.hideTimer` omits the live timer, `opts.preorder` swaps the age badge for a "Pre-order" badge |
+
+## Database Migrations (Run Order)
+
+| File | Purpose |
+|---|---|
+| `037_preorder.sql` | Pre-order columns + pre-order-aware `create_order` |
+
+## Deploy
+
+1. Supabase → SQL Editor → run `037_preorder.sql` (**first** — pages show no pre-order behaviour until the column exists).
+2. Netlify drag-and-drop: `index.html`, `admin/index.html`, `admin/orders.html`.
+
+## Verification Note
+
+Full end-to-end could not be run this session — the behaviour only activates once
+migration 037 is applied to the live Supabase (a manual production step). All three
+files' inline JS passed a `node --check` syntax pass; the SQL control flow was
+traced by hand.
+
+---
+
+# Customer Page Redesign — "Matcha Lab" (2026-10-21 / 2026-10-22)
+
+**Scope:** Make `index.html` (customer ordering page) professional, aesthetic and "wow" without slowing the order flow. Most customers are on **iOS**, so effects were picked for Safari. Everything stays a single vanilla-JS file; `create_order` still re-prices server-side.
+**Status:** All phases tested by MM on a real iPhone (local server `python -m http.server 8000`, `http://<PC-IP>:8000/`). **NOT deployed yet.**
+
+## Earlier on 2026-10-21 — Layout redesign (LINE MAN style)
+
+| # | Change |
+|---|---|
+| 1 | Option modal → bottom sheet: one choice per row (radio = required, checkbox = optional), sticky footer with qty stepper + "เพิ่มลงตะกร้า · ฿total" |
+| 2 | Cream page, sticky scrolling category tabs, 2 equal columns on phones, full-width add button |
+| 3 | Cart: `renderCartInto()` for desktop panel + mobile sheet, thumbnails, −/+ stepper, free-delivery progress; full-width bottom cart bar |
+| 4 | Checkout: form first, summary last, fee chip under dorm, submit pinned with total |
+| 5 | Cart persisted in localStorage (`glongnom_cart`, 3 h TTL, rebuilt from live MENU); green LINE pay button on the confirmation screen |
+
+## Phase 1 — Motion foundation (no DB)
+
+| # | Change |
+|---|---|
+| 1 | Motion tokens in `:root` (`--ease-out/-sheet/-pop/-pour`, `--dur-tap` 120 ms, `--dur-sheet` 280 ms); animate transform/opacity only |
+| 2 | `@media (prefers-reduced-motion)` block — iPhone "Reduce Motion" users get no animation |
+| 3 | Skeleton cards on first load + staggered card reveal (`renderSkeleton`, `revealMenu`); loading overlay now only used for order submit |
+| 4 | Frosted-glass cart bar (`-webkit-backdrop-filter`) |
+| 5 | Fly-to-cart: the glass (or photo) flies into the cart count and bumps it (`captureFlySource`, `flyToCart`) |
+| 6 | Price count-up for the sheet price and cart total (`countUp`) |
+| — | Haptics skipped: `navigator.vibrate` is unsupported on iOS |
+
+## Phase 2 — Live matcha glass (semi-realistic SVG, "style B")
+
+| # | Change |
+|---|---|
+| 1 | Migration **`038_visual_key.sql`** — `visual_key text` on `menus` (recipe tokens: `matcha`, body `milk/water/coconut/earlgrey/taro`, sauce `strawberry/blueberry/caramel/honey/biscoff/oreo`) and on `option_template_choices` (`grade_original/yame`, `milk_oat/cow`, `sweet_0..150`, `ice_in/side/none`, `matcha_in/side`, `top_konjac`). Backfills NULL rows only. **Applied by MM.** |
+| 2 | Admin pickers: recipe preset in `admin/index.html` menu form, choice key in `admin/options.html` — both only sent when the column exists |
+| 3 | Menu fetch falls back without `visual_key` on Postgres `42703` (works before the migration) |
+| 4 | Glass stage at the top of the option sheet on a dark "display case" background; layers pour/drift as options change (`glassSVG`, `applyGlass`, `updateGlass`) |
+| 5 | Separation rules (MM): แยกน้ำแข็ง + แยกมัทฉะ → ice in glass, layered liquid in a zip bag, matcha in a small cup; แยกน้ำแข็ง + เทมัทฉะ → ice in glass, one matcha-coloured liquid in the bag |
+| 6 | Honey Matcha: water layer is clear (`GLASS_WATER_CLEAR`, 45 % opacity) because the drink is layered; Pure Matcha stays green |
+
+## Hero — MM's own artwork
+
+| # | Change |
+|---|---|
+| 1 | A dark/gold/neon hero was built, then rejected by MM; three light options were mocked up, then MM supplied their own art |
+| 2 | Hero = `assets/hero-main.jpg` (1290×800, aspect-ratio box, max-width 480 px on desktop) + only the open/closed status on the blue note card + a small TH/EN toggle. No name, tagline, chips, glass or pre-order button (MM's choice) |
+| 3 | Status text (font **Mali**) centred in the blue card (x 11.2–48.4 %, y 39.4–69.4 %), sizes in `cqw` so it scales with the image; message clamped to 2 lines — keep `close_message` short |
+| 4 | Page background: `assets/bg-paper.jpg` (600×600 tile). Images re-compressed: hero 657→95 KB, paper 284→28 KB |
+
+## Phase 3 — Faster repeat orders (no DB)
+
+| # | Change |
+|---|---|
+| 1 | **Order again** card above the menu ("↻ สั่งเหมือนครั้งก่อน"): last successful order saved as ids only (`glongnom_last_order`), rebuilt from the live menu via `rebuildCartItem` (sold-out/changed items dropped, current prices); hidden while closed unless all pre-order; "All" tab only |
+| 2 | **Saved-customer checkout**: when name/phone/dorm/detail are all valid, one "จัดส่งให้" card replaces the form, with "แก้ไข"; any validation error re-opens the form |
+| — | Built then **removed** at MM's request: remembered option choices (order-again covers it) and the success-ritual glass on the confirmation screen (🎉 kept) |
+
+## Delivery location picker
+
+| # | Change |
+|---|---|
+| 1 | Native `<select>` (45 zones, iOS wheel) → button "📍 name · fee ›" that opens a bottom sheet; value kept in hidden `#customerDorm` so submit/validation are unchanged |
+| 2 | One flat list sorted by fee (cheap → expensive), then A–Z then ก–ฮ (`Intl.Collator(['en','th'], {numeric:true})`); fee pill on the right of every row (free = green "ฟรี", then 3 tints by fee rank) |
+| 3 | Search with Thai/English aliases (`DORM_ALIASES`: ดีคอนโด, เคฟ, มธ, …); "not found" state with "ดูทั้งหมด" |
+| 4 | Mock-up: https://claude.ai/artifact/GdBrTeASxH7p5c9D62qcKm (MM then asked for no recent row, no fee groups, no brand grouping) |
+
+## iOS fixes
+
+| # | Change |
+|---|---|
+| 1 | Safari auto-zoom on focus: inputs/selects/textareas are 16 px on iOS only (`@supports (-webkit-touch-callout: none)`); desktop/Android keep 0.88 rem |
+
+## Temporary test button - removed 2026-10-22
+
+The `?test=1` simulate-order button was deleted from `index.html` before deploy.
+
+## Backups (restore = copy over `index.html`)
+
+| File | State |
+|---|---|
+| `backups/index_2026-10-21_pre-phase1.html` | Before Phase 1 |
+| `backups/index_2026-10-21_pre-hero.html` | Before the first hero redesign |
+| `backups/index_2026-10-22_pre-image-hero.html` | Before MM's image hero |
+| `backups/index_2026-10-22_pre-phase3.html` | Before Phase 3 |
+| `backups/index_2026-10-22_pre-phase3-fixes.html` | Before removing prefs/ritual, honey/zoom fixes |
+| `backups/index_2026-10-22_pre-dorm-picker.html` | Before the delivery picker |
+| `backups/index_2026-10-22_pre-deploy-halloween.html` | Halloween skin, still with the test button |
+
+## Halloween skin (2026-10-22)
+
+- Switch in `index.html` `<head>`: `SHOP_SKIN = 'auto'` (Halloween 20 Oct – 1 Nov) / `'halloween'` / `'normal'`. `?theme=halloween|normal` overrides for testing. Sets `<html data-skin="halloween">` before first paint.
+- `themes/halloween.css`: every rule scoped to `[data-skin="halloween"]`. Navy BG, Halloween hero, status text in the white box (Creepster; Thai falls back to Sriracha), orange add/cart/submit buttons, cards unchanged.
+- `themes/halloween.js`: exits at once in the normal skin. Hero bats, slanted ticker, ghost/spider/cobweb on menu cards, spider drops on the cart bar when the count rises, ghosts float up on the confirmation screen, tap sparks. Watches the DOM only; no order/price logic touched. Reduce Motion turns the moving parts off.
+- Images: `assets/hero-halloween.jpg` (198 KB) and `assets/bg-halloween.jpg` (22 KB), compressed from MM's originals.
+- Turn it off: set `SHOP_SKIN = 'normal'` and redeploy `index.html`.
+- MM tested every part on a real iPhone over the LAN server (2026-10-22): all OK.
+
+## Deploy (prepared 2026-10-22)
+
+Clean deploy folder: `C:/Users/Teekatat/Glongnom-deploy-2026-10-22` (6.3 MB). Contains the site pages, `admin/`, `css/`, `js/`, `themes/`, `assets/` (without the unused `Glongnom_*` originals), `netlify/functions/` and `netlify.toml`. Left out on purpose: `backups/`, `supabase/`, `.git`, `.claude`, `.env.example`, `*.md`, CSV/PDF.
+
+1. Test button removed; inline JS and `themes/halloween.js` pass `node --check`; every key file served 200 from the deploy folder.
+2. Migrations: nothing new to run (latest is 038, already applied).
+3. Netlify -> Deploys -> drag the **whole** deploy folder in.
+4. Check on iPhone in a private tab: Halloween hero, open/closed text in the white box, place one real order end to end.
+5. After 1 Nov the skin turns off by itself (`SHOP_SKIN = 'auto'`).
+
+## Open ideas (Phase 4 — not started)
+
+Card → sheet morph (View Transitions), Prompt font for headings, bento strip (order again / today's promo / cups to free delivery), time-based dark mode.
+
+## Verification
+
+Every change: inline JS `node --check` + headless-Chrome screenshots at 390 px; MM confirmed each phase on a real iPhone. No real order was placed during testing.

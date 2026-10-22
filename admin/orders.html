@@ -86,6 +86,14 @@
     .empty-col { text-align: center; padding: 40px 12px; color: var(--text-muted); font-size: 13px; }
     .empty-col-positive { text-align: center; padding: 24px 12px; color: var(--text-secondary); }
 
+    /* PRE-ORDER SECTION (full width, below the live columns) */
+    .preorder-section { margin-top: 28px; }
+    .preorder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .preorder-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-pill);
+      background: #fef3c7; color: #92400e; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+
     /* ====== ORDER CARD — 3 sections ====== */
     .order-card { border-radius: var(--radius-md); border: 1.5px solid var(--border); margin-bottom: 14px; overflow: hidden; box-shadow: var(--shadow-xs); transition: box-shadow 0.2s; }
     .order-card:hover { box-shadow: var(--shadow-md); }
@@ -200,6 +208,7 @@
   <nav class="sidebar-nav">
     <div class="sidebar-group-label">Management</div>
     <a href="/admin/orders.html" class="active">&#129534; Order Queue</a>
+    <a href="/admin/rider.html">&#128757; Riders</a>
     <a href="/admin/">&#128203; Menu Management</a>
     <a href="/admin/options.html">&#9881;&#65039; Options</a>
     <a href="/admin/customers.html">&#127919; Customers</a>
@@ -264,6 +273,15 @@
       <div id="col-ready"></div>
     </div>
   </div>
+
+  <!-- Pre-order queue — orders placed for later; same cards, no timer -->
+  <div class="preorder-section" id="preorderSection" style="display:none;">
+    <div class="column-header" style="border-left:4px solid #f59e0b;">
+      <span>&#128197; Pre-order</span>
+      <span class="col-count" id="count-preorder">0</span>
+    </div>
+    <div id="col-preorder" class="preorder-grid"></div>
+  </div>
 </div>
 
 <!-- Close Shop Modal -->
@@ -277,7 +295,7 @@
       <label style="display:block;font-size:var(--text-sm);font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Close Message</label>
       <textarea id="closeMessageInput" rows="3"
         style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Sarabun',system-ui,sans-serif;outline:none;resize:vertical;background:var(--surface);color:var(--text-primary);"
-        placeholder="ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^"></textarea>
+        placeholder="ขณะนี้ร้านปิดค่ะ ^^"></textarea>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-ghost" onclick="closeCloseShopModal()">ยกเลิก</button>
@@ -369,20 +387,40 @@
     btn.classList.toggle('on', on);
   }
 
+  // ---- PAYMENT (temporarily disabled) ----
+  // While the payment flow is off, every incoming order is auto-marked paid
+  // (and its income recorded) as soon as it loads. Flip this back to false
+  // to re-enable manual "Unpaid → Paid" handling.
+  const AUTO_MARK_PAID = true;
+  const autoPaidInFlight = new Set();  // guards against double-marking during concurrent reloads
+
+  async function autoMarkNewOrdersPaid() {
+    if (!AUTO_MARK_PAID) return;
+    const unpaid = orders.filter(o => o.payment_status !== 'paid' && !autoPaidInFlight.has(o.id));
+    for (const o of unpaid) {
+      autoPaidInFlight.add(o.id);
+      const { error } = await supabase.from('orders').update({ payment_status: 'paid' }).eq('id', o.id);
+      if (error) { autoPaidInFlight.delete(o.id); continue; }  // let a later load retry
+      o.payment_status = 'paid';  // reflect locally so this render shows Paid
+      const { error: accErr } = await supabase.rpc('record_order_income', { p_order_id: o.id });
+      if (accErr) console.warn('Auto-paid accounting record failed:', accErr.message);
+    }
+  }
+
   // ---- DATA ----
   let orders = [];
 
   // ---- SHOP TOGGLE STATE ----
   let shopId          = null;
   let shopIsOpen      = true;
-  let currentCloseMsg = 'ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^';
+  let currentCloseMsg = 'ขณะนี้ร้านปิดค่ะ ^^';
 
   async function loadShop() {
     const { data } = await supabase.from('shops').select('*').single();
     if (!data) return;
     shopId          = data.id;
     shopIsOpen      = data.is_open;
-    currentCloseMsg = data.close_message || 'ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^';
+    currentCloseMsg = data.close_message || 'ขณะนี้ร้านปิดค่ะ ^^';
     updateShopToggleBtn();
   }
 
@@ -412,7 +450,7 @@
 
   async function confirmCloseShop() {
     const msg = document.getElementById('closeMessageInput').value.trim()
-      || 'ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^';
+      || 'ขณะนี้ร้านปิดค่ะ ^^';
     shopIsOpen      = false;
     currentCloseMsg = msg;
     await supabase.from('shops')
@@ -465,6 +503,7 @@
     isFirstLoad  = false;
     pendingPrint = false;
 
+    await autoMarkNewOrdersPaid();
     renderAll();
     document.getElementById('lastUpdate').textContent =
       'Updated ' + new Date().toLocaleTimeString('th-TH');
@@ -492,8 +531,14 @@
 
   // ---- RENDER ----
   function renderAll() {
+    // Pre-order orders are pulled OUT of the live columns and shown in their
+    // own section at the bottom. An order is a pre-order if is_preorder = true
+    // (set server-side when any item in it is a pre-order item).
+    const preorders = orders.filter(o => o.is_preorder);
+    const active    = orders.filter(o => !o.is_preorder);
+
     const byStatus = { new: [], preparing: [], ready: [] };
-    orders.forEach(o => { if (byStatus[o.status]) byStatus[o.status].push(o); });
+    active.forEach(o => { if (byStatus[o.status]) byStatus[o.status].push(o); });
 
     const countNewEl = document.getElementById('count-new');
     countNewEl.textContent = byStatus.new.length;
@@ -505,7 +550,18 @@
     document.getElementById('col-preparing').innerHTML = renderColumn(byStatus.preparing, 'preparing');
     document.getElementById('col-ready').innerHTML     = renderColumn(byStatus.ready,     'ready');
 
+    renderPreorderSection(preorders);
     updateTabTitle(byStatus.new.length);
+  }
+
+  function renderPreorderSection(list) {
+    const section = document.getElementById('preorderSection');
+    document.getElementById('count-preorder').textContent = list.length;
+    if (!list.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    // Same card as the live queue, but no live timer (timing isn't urgent here).
+    document.getElementById('col-preorder').innerHTML =
+      list.map(o => renderCard(o, { hideTimer: true, preorder: true })).join('');
   }
 
   function renderColumn(list, status) {
@@ -521,7 +577,7 @@
     return list.map(o => renderCard(o)).join('');
   }
 
-  function renderCard(order) {
+  function renderCard(order, opts = {}) {
     // TOP
     const age = getOrderAge(order.created_at);
     const tableLabel = order.table_no ? ' T.' + order.table_no : '';
@@ -553,20 +609,26 @@
     let kitchenBtns = '';
     if (order.status === 'new') {
       kitchenBtns = `<button class="btn btn-preparing" onclick="updateStatus('${order.id}','preparing')">&#9654; Prepare</button>
-                     <button class="btn-icon" title="Cancel order" onclick="updateStatus('${order.id}','cancelled')">&#10005;</button>`;
+                     <button class="btn-icon" title="Cancel order" onclick="cancelOrder('${order.id}')">&#10005;</button>`;
     } else if (order.status === 'preparing') {
       kitchenBtns = `<button class="btn btn-ready" onclick="updateStatus('${order.id}','ready')">&#10003; Ready</button>
-                     <button class="btn-icon" title="Cancel order" onclick="updateStatus('${order.id}','cancelled')">&#10005;</button>`;
+                     <button class="btn-icon" title="Cancel order" onclick="cancelOrder('${order.id}')">&#10005;</button>`;
     } else if (order.status === 'ready') {
       kitchenBtns = `<button class="btn btn-served" onclick="updateStatus('${order.id}','served')">Served</button>`;
     }
+
+    const riderBtn = (order.order_type === 'delivery')
+      ? `<button class="btn" id="riderBtn-${order.id}" style="background:var(--pink-soft);color:var(--brown-dark);padding:7px 12px;font-size:13px;" title="คัดลอกลิงก์ให้ไรเดอร์" onclick="copyToRider('${order.id}')">&#128757; Rider</button>`
+      : '';
 
     return `<div class="order-card" id="card-${order.id}">
       <div class="card-top">
         <div class="card-top-row1">
           <span class="order-no">${escHtml(order.order_no || '—')}</span>
           <span class="type-badge">${escHtml(typeLabel)}</span>
-          <span class="age-badge ${age.cls}">${age.label}</span>
+          ${opts.preorder
+            ? `<span class="preorder-badge">&#128197; Pre-order</span>`
+            : `<span class="age-badge ${age.cls}">${age.label}</span>`}
         </div>
         <div class="card-top-row2">
           <span class="customer-name">${escHtml(order.customer_name || '—')}</span>
@@ -583,12 +645,22 @@
         <span class="card-total">&#3647;${Number(order.total_price || 0).toFixed(0)}</span>
         ${payBtn}
         ${kitchenBtns}
-        <span class="timer-display" data-timer-start="${order.created_at}">&#9201; 00:00</span>
+        ${riderBtn}
+        ${opts.hideTimer ? '' : `<span class="timer-display" data-timer-start="${order.created_at}">&#9201; 00:00</span>`}
       </div>
     </div>`;
   }
 
   // ---- ACTIONS ----
+  // Cancelling is destructive, so require two separate confirmations.
+  function cancelOrder(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    const label = order ? (order.order_no || '') : '';
+    if (!confirm('ยกเลิกออเดอร์ ' + label + ' ?')) return;
+    if (!confirm('ยืนยันอีกครั้ง — การยกเลิกไม่สามารถย้อนกลับได้\nยกเลิกออเดอร์ ' + label + ' ถาวร?')) return;
+    updateStatus(orderId, 'cancelled');
+  }
+
   async function updateStatus(orderId, newStatus) {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
     if (error) { showToast('Error: ' + error.message); return; }
@@ -606,6 +678,68 @@
     const labels = { preparing: 'Preparing', ready: 'Ready', served: 'Served', cancelled: 'Cancelled' };
     showToast(labels[newStatus] || 'Updated');
     await loadOrders();
+  }
+
+  // ---- COPY TO RIDER (dispatch link) ----
+  async function copyText(str) {
+    try { await navigator.clipboard.writeText(str); return true; }
+    catch (e) {
+      try { const t = document.createElement('textarea'); t.value = str; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); return true; }
+      catch (e2) { return false; }
+    }
+  }
+
+  async function copyToRider(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    // Reuse an existing active dispatch for this order, else create a new OPEN job.
+    let token = null;
+    const { data: existing, error: exErr } = await supabase
+      .from('rider_jobs')
+      .select('accept_token')
+      .eq('order_id', orderId)
+      .in('status', ['open', 'accepted', 'picked_up'])
+      .order('assigned_at', { ascending: false })
+      .limit(1);
+    if (exErr) { showToast('ผิดพลาด: ' + exErr.message); return; }
+
+    if (existing && existing.length) {
+      token = existing[0].accept_token;
+    } else {
+      const { data, error } = await supabase.from('rider_jobs').insert({
+        order_id:         order.id,
+        order_no:         order.order_no,
+        customer_name:    order.customer_name,
+        customer_phone:   order.customer_phone,
+        delivery_address: order.customer_address,
+        dropoff_label:    (order.customer_address || '').split(' — ')[0] || null,
+        // Rider wage now follows the per-dorm rider_gain snapshotted on the
+        // order (migration 028), NOT the customer's delivery fee. Older orders
+        // placed before 028 have rider_gain = 0, so fall back to delivery_fee.
+        rider_fee:        order.rider_gain || order.delivery_fee || 0,
+        status:           'open'
+      }).select('accept_token').single();
+      if (error) { showToast('สร้างงานไม่สำเร็จ: ' + error.message); return; }
+      token = data.accept_token;
+    }
+
+    const link = location.origin + '/r.html?job=' + token;
+    const msg = '🛵 งานส่ง Glongnom\n' +
+      'ออเดอร์ ' + (order.order_no || '') +
+      (order.customer_address ? '\n📍 ' + order.customer_address : '') +
+      '\nกดรับงาน: ' + link;
+    const ok = await copyText(msg);
+    if (ok) {
+      // Mark the button as "sent" so staff can see at a glance which orders
+      // have already been handed to a rider. Resets on the next data reload.
+      const btn = document.getElementById('riderBtn-' + orderId);
+      if (btn) {
+        btn.style.background = '#d4edda';
+        btn.style.color      = '#155724';
+        btn.innerHTML        = '&#10003; ส่งไรเดอร์แล้ว';
+      }
+    }
+    showToast(ok ? 'คัดลอกลิงก์รับงานแล้ว — วางในกลุ่ม LINE ได้เลย' : 'คัดลอกไม่สำเร็จ: ' + link);
   }
 
   async function markPaid(orderId) {

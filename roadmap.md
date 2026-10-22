@@ -697,3 +697,76 @@ Build a scalable restaurant operating system that connects:
 * AI intelligence
 
 into one unified platform — built on Supabase, deployed on Vercel, accessible from any device.
+
+---
+
+---
+
+# COMMERCIALIZATION — Selling the POS as a Real Product
+**Added:** 2026-06-13 (advisory notes for turning Glongnom POS into a sellable product)
+
+## Core Shift: Single-tenant → Multi-tenant
+
+Today the system is **single-tenant** (one system = one shop, Glongnom). To sell to real shops there are two models:
+
+| Model | Meaning | Best for |
+|---|---|---|
+| A. Per-shop deployment | Copy the system per shop, separate DB | Selling a few shops, install/setup work |
+| **B. Multi-tenant SaaS** ⭐ | One system, shops sign up and share it, isolated by `shop_id` | Selling at scale, recurring revenue |
+
+**Foundation already exists:** every table has `shop_id` + RLS, which is exactly the basis for multi-tenant isolation. The architecture was built the right way from the start.
+
+## Tools / Database Recommendations
+
+### Database — stay on PostgreSQL / Supabase
+- POS data is highly relational (order ↔ item ↔ option ↔ inventory ↔ accounting) → relational Postgres fits best. Avoid NoSQL (reporting/accounting becomes painful).
+- Supabase = managed Postgres + Auth + Realtime + API. No vendor lock-in — can later move to Neon / AWS RDS since it's standard Postgres.
+
+### Frontend — move to a framework (Next.js / React) eventually
+- Current Vanilla JS duplicates sidebar/auth across 13 pages (review finding C3) — a long-term maintenance burden for a product.
+- Next.js gives reusable components + built-in API routes (move logic server-side, matching the "don't trust the client" lesson from the create_order RPC work).
+- **Do not rewrite prematurely** — migrate incrementally once there are real customers.
+
+### Backend logic — shift server-side
+- The `create_order` RPC pattern (server owns pricing/logic) is the correct direction. A commercial product should have a clear backend layer (Next.js API routes or Supabase Edge Functions), not logic floating in the browser.
+
+### New pieces needed to "sell"
+| Need | Recommended tool |
+|---|---|
+| 💳 Charge shops a monthly fee | Stripe (intl) / Omise, 2C2P (Thailand) |
+| 📊 Error / uptime monitoring | Sentry (free tier) |
+| 📧 System email (invite, reset) | Resend / Postmark |
+| 🔔 Notifications | Telegram (already built) |
+
+## Hosting vs Domain — what they are, are they necessary
+
+- **Domain** = the web address (e.g. `glongnom-pos.com`). Rented yearly from a registrar (Cloudflare, Namecheap, or TH: Z.com, Hostatom), ~300–500 THB/year for `.com`. Currently using the free `glongnom-pos.netlify.app` subdomain.
+  - *Necessary?* Works without it, but **buy one when selling for real** — professionalism, branding, trust, and you own it (can move hosts without changing the URL). Cheap insurance.
+- **Hosting** = where the app lives so it's reachable 24/7. **Netlify already is the host** (free tier).
+  - *Necessary?* **Yes, always** — the app must live somewhere. For a product, just upgrade the tier or move to a better fit (Vercel suits Next.js).
+
+> Mnemonic: **Domain = the shop's signboard (address)** · **Hosting = the building the shop operates in (where things actually live).** The signboard is optional-ish; the building is mandatory.
+
+## Cost Ladder (approximate, per month)
+
+| Stage | Stack | Cost |
+|---|---|---|
+| Now (experimenting) | All free + Telegram | ~0 THB |
+| Selling first 1–10 shops | Supabase Pro ($25) + domain (~35฿/mo) + Vercel free | ~1,000 THB/mo |
+| Growing 50+ shops | Supabase Team + Vercel Pro + Stripe + Sentry | ~3,000–6,000 THB/mo |
+
+> Pay for **Supabase Pro** first — no project pausing, more egress, backups.
+
+## Recommended Go-to-Market Roadmap (no rush, stepwise)
+
+1. **Now:** use Glongnom as the reference shop — make the system stable and feature-complete (in progress).
+2. **Before selling:** add self-serve **shop signup** (signup → auto-create a new `shop_id`) = the step into true multi-tenancy.
+3. **First 1–3 shops:** buy a domain + upgrade to Supabase Pro + add monthly subscription billing.
+4. **When managing many shops gets hard:** consider the Next.js frontend rewrite for long-term sustainability.
+
+## Summary
+
+- **DB:** stay on Postgres/Supabase — fits POS and is already multi-tenant-ready.
+- **Tools:** later move frontend to Next.js + add Stripe/Omise (billing), Sentry (monitoring).
+- **Hosting:** necessary (already have Netlify) — just upgrade when selling.
+- **Domain:** not required to function, but **should buy** when selling (a few hundred baht/year, worth it for credibility).

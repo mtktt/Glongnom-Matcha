@@ -1,0 +1,179 @@
+/* ============================================================
+   Halloween skin for index.html
+   Active only when <html data-skin="halloween"> (set by the skin switch in index.html's <head>).
+   Rule: change colour, artwork and decoration only — never layout, sizes or the order flow.
+   ============================================================ */
+:root[data-skin="halloween"] {
+  --hw-navy:        #0F1B33;   /* page / night sky (matches the BG texture) */
+  --hw-navy-2:      #17264A;
+  --hw-orange:      #F2862E;   /* action colour: add / cart / submit */
+  --hw-orange-deep: #D9681A;
+  --hw-gold:        #F6B23C;   /* "TRICK" lettering in the hero */
+  --hw-ink:         #14203B;   /* text on orange */
+  --hw-ghost:       #F7F4EE;
+  --hw-font:        'Creepster', 'Sriracha', 'Mali', cursive;   /* Creepster has no Thai: Thai falls back to Sriracha */
+}
+
+/* ── Page background: MM's navy paper texture ── */
+:root[data-skin="halloween"] body {
+  background: var(--hw-navy) url('../assets/bg-halloween.jpg') repeat;
+}
+
+/* ── Hero: Halloween artwork; open/closed status sits in the white box ── */
+:root[data-skin="halloween"] .hero-art {
+  background: var(--hw-navy) url('../assets/hero-halloween.jpg') center / cover no-repeat;
+  overflow: hidden;   /* bats fly inside the artwork only (no sideways scroll on phones) */
+}
+/* White box in the artwork: x 5.7–48.7%, y 60–86.6%. The pumpkin covers its bottom-left corner,
+   so the text area starts at x 14%. */
+:root[data-skin="halloween"] .hero-status {
+  left: 14%; width: 34%; top: 61%; bottom: 14.5%;
+  gap: 0.8cqw; color: var(--hw-ink);
+}
+:root[data-skin="halloween"] .hero-status-title {
+  font-family: var(--hw-font); font-weight: 400; font-size: 3.9cqw; letter-spacing: 0.02em;
+  color: var(--hw-orange-deep);
+}
+:root[data-skin="halloween"] .hero-status-msg {
+  font-family: 'Sriracha', 'Mali', sans-serif; font-size: 2.8cqw; color: #24304F;
+}
+:root[data-skin="halloween"] .hero.is-closed .hero-status-title { color: #9B1C3A; }
+:root[data-skin="halloween"] #langToggle { background: rgba(247,244,238,0.9); }
+
+/* Bats over the hero (added by halloween.js) — transform-only animation */
+.hw-bat { position: absolute; top: 14%; left: -10%; width: 7cqw; z-index: 1; pointer-events: none; animation: hwFly 13s linear infinite; }
+.hw-bat svg { display: block; width: 100%; animation: hwFlap 0.45s ease-in-out infinite alternate; }
+.hw-bat.b2 { top: 5%; width: 4.5cqw; animation-duration: 18s; animation-delay: -7s; }
+.hw-bat.b3 { top: 30%; width: 5cqw; animation-duration: 22s; animation-delay: -14s; }
+@keyframes hwFly {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(30cqw, 4cqw); }
+  50%  { transform: translate(60cqw, -2cqw); }
+  75%  { transform: translate(85cqw, 5cqw); }
+  100% { transform: translate(120cqw, 0); }
+}
+@keyframes hwFlap { to { transform: scaleY(0.5); } }
+
+/* ── Ticker band under the hero (added by halloween.js) ── */
+.hw-ticker-wrap { overflow: hidden; padding: 10px 0 4px; max-width: 1100px; margin: 0 auto; }
+.hw-ticker {
+  background: var(--hw-orange); color: var(--hw-ink); border-block: 2px solid var(--hw-ink);
+  transform: rotate(-1.5deg); margin: 0 -12px; overflow: hidden;
+}
+.hw-ticker-track { display: flex; width: max-content; animation: hwTick 24s linear infinite; }
+.hw-ticker span { font-family: var(--hw-font); font-size: 1.05rem; letter-spacing: 0.06em; padding: 6px 0; white-space: nowrap; }
+.hw-ticker b { color: var(--hw-ghost); font-weight: 400; padding: 0 12px; -webkit-text-stroke: 1px var(--hw-ink); }
+@keyframes hwTick { to { transform: translateX(-50%); } }
+
+/* ── Category tabs on the dark page ── */
+:root[data-skin="halloween"] .category-bar { background: rgba(15,27,51,0.94); border-bottom-color: rgba(242,134,46,0.30); }
+:root[data-skin="halloween"] .cat-btn { color: #C9CFDF; }
+:root[data-skin="halloween"] .cat-btn.active { color: var(--hw-gold); }
+:root[data-skin="halloween"] .cat-btn.active::after { background: var(--hw-orange); }
+:root[data-skin="halloween"] .cat-btn:hover:not(.active) { color: #fff; }
+:root[data-skin="halloween"] .menu-grid > div:not(.menu-card):not(.skel-card) { color: #C9CFDF !important; }   /* "no menu" note */
+
+/* ── Menu cards: same cream/white card, orange add button, room for stickers ── */
+:root[data-skin="halloween"] .menu-card { position: relative; }
+:root[data-skin="halloween"] .menu-add-btn { background: var(--hw-orange); color: var(--hw-ink); }
+:root[data-skin="halloween"] .menu-add-btn:hover:not(:disabled) { background: var(--hw-orange-deep); }
+:root[data-skin="halloween"] .menu-add-btn:disabled { background: #D9CBC1; color: #fff; }
+
+/* Ghost peeking over a card's top edge */
+.hw-peek {
+  position: absolute; right: 12px; top: -20px; width: 28px; z-index: 3; pointer-events: none;
+  animation: hwPeek 5s ease-in-out infinite; animation-delay: var(--hw-delay, 0s);
+}
+.hw-peek svg { display: block; width: 100%; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25)); }
+@keyframes hwPeek {
+  0%, 55%, 100% { transform: translateY(14px) rotate(8deg); opacity: 0; }
+  65%, 88%      { transform: translateY(0) rotate(-4deg); opacity: 1; }
+}
+/* Spider hanging into the menu photo */
+.hw-hang { position: absolute; top: 0; right: 24%; width: 18px; z-index: 2; pointer-events: none; transform-origin: 50% 0; animation: hwSwing 3.2s ease-in-out infinite; }
+.hw-hang i { display: block; width: 1.5px; height: 26px; margin: 0 auto; background: rgba(247,244,238,0.85); }
+.hw-hang svg { display: block; width: 100%; margin-top: -2px; }
+@keyframes hwSwing { 50% { transform: rotate(6deg) translateY(4px); } }
+/* Cobweb in a photo corner */
+.hw-web { position: absolute; right: 0; bottom: 0; width: 34%; max-width: 64px; z-index: 1; pointer-events: none; opacity: 0.9; }
+
+/* ── Order-again card + sold-out label ── */
+:root[data-skin="halloween"] .reorder-btn { background: var(--hw-orange); color: var(--hw-ink); }
+
+/* ── Mobile cart bar ── */
+:root[data-skin="halloween"] .cart-bar-wrap {
+  background: rgba(15,27,51,0.94); border-top-color: rgba(242,134,46,0.35); box-shadow: 0 -4px 16px rgba(0,0,0,0.35);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-skin="halloween"] .cart-bar-wrap { background: rgba(15,27,51,0.78); }
+}
+:root[data-skin="halloween"] .cart-bar { background: var(--hw-orange); color: var(--hw-ink); }
+:root[data-skin="halloween"] .cart-bar:hover { background: var(--hw-orange-deep); }
+:root[data-skin="halloween"] .cart-bar-count { background: var(--hw-ink); color: var(--hw-gold); }
+:root[data-skin="halloween"] .cart-bar-hint { color: var(--hw-gold); }
+/* Spider that drops onto the cart bar after an add (added by halloween.js) */
+.hw-drop {
+  position: absolute; right: 22%; bottom: 100%; width: 22px; z-index: 1; pointer-events: none;
+  opacity: 0; transform: translateY(-120px);
+  transition: transform 0.9s cubic-bezier(.3,1.5,.5,1), opacity 0.25s;
+}
+.hw-drop i { position: absolute; left: 50%; bottom: 90%; width: 1.5px; height: 160px; background: rgba(247,244,238,0.8); }
+.hw-drop svg { display: block; width: 100%; }
+.hw-drop.down { opacity: 1; transform: translateY(14px); }
+
+/* ── Buttons inside the white sheets: orange = "do it" ── */
+:root[data-skin="halloween"] .modal-confirm-btn,
+:root[data-skin="halloween"] .cart-checkout-btn,
+:root[data-skin="halloween"] .cart-sheet-checkout-btn,
+:root[data-skin="halloween"] .submit-btn { background: var(--hw-orange); color: var(--hw-ink); }
+:root[data-skin="halloween"] .modal-confirm-btn:hover,
+:root[data-skin="halloween"] .cart-checkout-btn:hover:not(:disabled),
+:root[data-skin="halloween"] .cart-sheet-checkout-btn:hover,
+:root[data-skin="halloween"] .submit-btn:hover:not(:disabled) { background: var(--hw-orange-deep); }
+:root[data-skin="halloween"] .freedel-fill { background: var(--hw-orange); }
+:root[data-skin="halloween"] .cart-freedel { background: #FFF1E4; }
+
+/* Little stickers next to sheet titles */
+:root[data-skin="halloween"] .cart-sheet-title::after,
+:root[data-skin="halloween"] .cart-header-title::after,
+:root[data-skin="halloween"] .checkout-drawer-title::after {
+  content: ''; display: inline-block; width: 20px; height: 22px; margin-left: 6px; vertical-align: -4px;
+  background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 56'%3E%3Cpath d='M28 14c0-5 1-8 4-10' stroke='%2314203B' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cellipse cx='30' cy='34' rx='26' ry='20' fill='%23F2862E' stroke='%2314203B' stroke-width='2.5'/%3E%3Cpath d='M15 28l7 5h-7zM45 28l-7 5h7zM17 41q13 8 26 0l-4 4-4-3-4 3-4-3-4 3-3-3z' fill='%2314203B'/%3E%3C/svg%3E");
+}
+:root[data-skin="halloween"] .checkout-drawer-title::after {
+  width: 18px; height: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 48'%3E%3Cpath d='M5 44V20C5 10 11.5 4 20 4s15 6 15 16v24l-5-4-5 4-5-4-5 4-5-4z' fill='%23F7F4EE' stroke='%2314203B' stroke-width='2.5' stroke-linejoin='round'/%3E%3Cellipse cx='14.5' cy='20' rx='2.6' ry='3.6' fill='%2314203B'/%3E%3Cellipse cx='25.5' cy='20' rx='2.6' ry='3.6' fill='%2314203B'/%3E%3Cellipse cx='20' cy='29' rx='2.6' ry='3.2' fill='%2314203B'/%3E%3C/svg%3E");
+}
+
+/* ── Confirmation screen: pumpkin instead of 🎉, ghosts float up (halloween.js) ── */
+:root[data-skin="halloween"] .confirm-icon { font-size: 0; }
+:root[data-skin="halloween"] .confirm-icon::before { content: '🎃'; font-size: 3rem; }
+:root[data-skin="halloween"] .confirm-total-row { border-top-color: var(--hw-orange); }
+.hw-float { position: fixed; bottom: -60px; width: 34px; z-index: 2500; pointer-events: none; animation: hwFloat 2.8s ease-in forwards; }
+.hw-float svg { display: block; width: 100%; }
+@keyframes hwFloat {
+  0%   { transform: translate(0, 0) rotate(0); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(var(--dx, 0), -105vh) rotate(var(--rot, 10deg)); opacity: 0; }
+}
+
+/* ── Toast, loading ── */
+:root[data-skin="halloween"] #toast { background: var(--hw-ink); color: var(--hw-gold); }
+:root[data-skin="halloween"] #loadingOverlay { background: rgba(15,27,51,0.92); }
+:root[data-skin="halloween"] .spinner { border-color: rgba(247,244,238,0.2); border-top-color: var(--hw-orange); }
+:root[data-skin="halloween"] .spinner-label { color: var(--hw-ghost); }
+
+/* ── Tap sparks: small four-point stars ── */
+.hw-spark {
+  position: fixed; width: 12px; height: 12px; z-index: 5000; pointer-events: none;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: hwSpark 0.6s ease-out forwards;
+}
+@keyframes hwSpark { to { transform: translate(var(--dx), var(--dy)) rotate(90deg) scale(0.3); opacity: 0; } }
+
+/* Reduce Motion: keep the artwork, drop everything that moves */
+@media (prefers-reduced-motion: reduce) {
+  .hw-bat, .hw-spark, .hw-float, .hw-drop { display: none !important; }
+  .hw-peek { opacity: 1; transform: none; }
+  .hw-ticker-track { animation: none !important; }
+}

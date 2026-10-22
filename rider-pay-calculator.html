@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glongnom · Rider Pay Model</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  :root {
+    /* matcha-grounded, chosen neutrals (slight green bias) */
+    --paper:        #f6f6f1;
+    --surface:      #ffffff;
+    --surface-2:    #eef0e8;
+    --ink:          #1d221a;
+    --ink-soft:     #56604e;
+    --hair:         #dce0d2;
+    --accent:       #4f7a3a;   /* muted matcha, not neon */
+    --accent-deep:  #3a5c2b;
+    --accent-wash:  #e7efdd;
+    --good:         #3f7d3a;
+    --good-wash:    #e4f0dd;
+    --warn:         #9a6a12;
+    --warn-wash:    #f6ecd4;
+    --crit:         #a24632;
+    --crit-wash:    #f4ddd6;
+    --shadow:       0 1px 2px rgba(30,40,20,.06), 0 8px 24px rgba(30,40,20,.06);
+    --radius:       14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:       #12140f;
+      --surface:     #1a1d16;
+      --surface-2:   #222619;
+      --ink:         #eef0e6;
+      --ink-soft:    #a0a894;
+      --hair:        #2e3324;
+      --accent:      #9cc271;
+      --accent-deep: #b7d491;
+      --accent-wash: #232b19;
+      --good:        #86c07a;
+      --good-wash:   #1e2a19;
+      --warn:        #d7ab5a;
+      --warn-wash:   #2c2413;
+      --crit:        #e0846c;
+      --crit-wash:   #2e1a14;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper:#f6f6f1; --surface:#ffffff; --surface-2:#eef0e8; --ink:#1d221a; --ink-soft:#56604e;
+    --hair:#dce0d2; --accent:#4f7a3a; --accent-deep:#3a5c2b; --accent-wash:#e7efdd;
+    --good:#3f7d3a; --good-wash:#e4f0dd; --warn:#9a6a12; --warn-wash:#f6ecd4;
+    --crit:#a24632; --crit-wash:#f4ddd6; --shadow:0 1px 2px rgba(30,40,20,.06),0 8px 24px rgba(30,40,20,.06);
+  }
+  :root[data-theme="dark"] {
+    --paper:#12140f; --surface:#1a1d16; --surface-2:#222619; --ink:#eef0e6; --ink-soft:#a0a894;
+    --hair:#2e3324; --accent:#9cc271; --accent-deep:#b7d491; --accent-wash:#232b19;
+    --good:#86c07a; --good-wash:#1e2a19; --warn:#d7ab5a; --warn-wash:#2c2413;
+    --crit:#e0846c; --crit-wash:#2e1a14; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 34px 22px 72px; }
+
+  /* header */
+  header.top { display: flex; flex-direction: column; gap: 8px; margin-bottom: 30px; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700;
+  }
+  h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.12; margin: 0; text-wrap: balance; font-weight: 800; letter-spacing: -.01em; }
+  .sub { color: var(--ink-soft); max-width: 62ch; font-size: 15px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 22px;
+  }
+  .card h2 {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-soft); margin: 0 0 18px; font-weight: 700;
+  }
+
+  /* controls */
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 600; margin-bottom: 7px; }
+  .field label .val { color: var(--accent); font-weight: 800; }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 22px; }
+  input[type=number], input[type=text] {
+    width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--hair);
+    background: var(--paper); color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums;
+    font-family: inherit;
+  }
+  input:focus, .seg button:focus-visible, button:focus-visible, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 5px; }
+  textarea {
+    width: 100%; min-height: 110px; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--hair);
+    background: var(--paper); color: var(--ink); resize: vertical;
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace; font-size: 13px; line-height: 1.5;
+  }
+  select {
+    padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hair);
+    background: var(--paper); color: var(--ink); font-family: inherit; font-size: 14px;
+  }
+  .savebanner {
+    display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 11px;
+    background: var(--good-wash); border: 1px solid var(--good); color: var(--good); font-size: 13px; font-weight: 600; margin-bottom: 16px;
+  }
+
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button {
+    flex: 1; min-width: 62px; padding: 8px 6px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--hair); background: var(--paper); color: var(--ink-soft);
+    font-size: 13px; font-weight: 600; font-family: inherit; transition: all .12s ease;
+  }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent-wash); border-color: var(--accent); color: var(--accent-deep); font-weight: 700;
+  }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* result hero */
+  .payhero {
+    background: linear-gradient(160deg, var(--accent-wash), var(--surface));
+    border: 1px solid var(--accent);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  }
+  .payhero .lbl { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-deep); font-weight: 700; }
+  .payhero .big { font-size: 46px; font-weight: 800; letter-spacing: -.02em; line-height: 1; margin: 6px 0 2px; }
+  .payhero .big small { font-size: 20px; font-weight: 700; color: var(--ink-soft); }
+  .payhero .note { font-size: 13px; color: var(--ink-soft); }
+
+  /* breakdown rows */
+  .rows { display: flex; flex-direction: column; gap: 0; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px dashed var(--hair); font-size: 14px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: var(--ink-soft); }
+  .row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row.total .k, .row.total .v { color: var(--ink); font-weight: 800; font-size: 15px; }
+
+  .monthly { margin-top: 16px; padding: 14px 16px; border-radius: 11px; background: var(--surface-2); font-size: 14px; }
+  .monthly .m-big { font-size: 24px; font-weight: 800; color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+
+  /* tables */
+  .tablecard { margin-top: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .scroll { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); font-weight: 700; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  tr.hl td { background: var(--accent-wash); }
+  tfoot td { font-weight: 800; border-top: 2px solid var(--hair); border-bottom: none; background: var(--surface-2); }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .chip.green { background: var(--good-wash); color: var(--good); }
+  .chip.red   { background: var(--crit-wash); color: var(--crit); }
+
+  /* dorm table specifics */
+  .dist-inp, .pay-inp { width: 78px; padding: 5px 8px; font-size: 14px; text-align: right; }
+  .pay-inp { border-color: var(--accent); background: var(--accent-wash); font-weight: 700; color: var(--accent-deep); }
+  .icon-btn {
+    border: 1px solid var(--hair); background: var(--paper); color: var(--ink-soft);
+    width: 28px; height: 28px; border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1;
+    font-family: inherit; transition: all .12s ease;
+  }
+  .icon-btn:hover { border-color: var(--crit); color: var(--crit); background: var(--crit-wash); }
+  .addbtn {
+    padding: 9px 16px; border-radius: 9px; border: 1px solid var(--accent); cursor: pointer;
+    background: var(--accent-wash); color: var(--accent-deep); font-weight: 700; font-size: 14px; font-family: inherit;
+    white-space: nowrap; transition: all .12s ease;
+  }
+  .addbtn:hover { background: var(--accent); color: #fff; }
+  .addbtn.ghost { background: var(--paper); border-color: var(--hair); color: var(--ink-soft); }
+  .addbtn.ghost:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-wash); }
+  .addform { display: grid; grid-template-columns: 2fr 1fr auto; gap: 10px; align-items: end; }
+  @media (max-width: 620px) { .addform { grid-template-columns: 1fr; } }
+  .mini-label { font-size: 12px; font-weight: 600; margin-bottom: 5px; color: var(--ink-soft); }
+
+  .note-list { font-size: 13.5px; color: var(--ink-soft); line-height: 1.7; padding-left: 18px; margin: 6px 0 0; }
+  .note-list b { color: var(--ink); }
+  .foothead { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; margin: 30px 0 4px; }
+  .formula {
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+    background: var(--surface-2); border: 1px solid var(--hair); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; color: var(--ink); overflow-x: auto; margin-top: 8px;
+  }
+  .disclaimer { font-size: 12px; color: var(--ink-soft); margin-top: 26px; border-top: 1px solid var(--hair); padding-top: 14px; }
+
+  /* origin badge */
+  .origin { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 11px;
+    background: var(--accent-wash); border: 1px solid var(--accent); font-size: 13.5px; margin-bottom: 18px; }
+  .origin .pin { font-size: 20px; }
+  .origin b { color: var(--accent-deep); }
+
+  /* tabs */
+  .tabs { display: flex; gap: 0; margin: 0 0 22px; border-bottom: 1px solid var(--hair); }
+  .tabs button {
+    appearance: none; border: none; background: none; font-family: inherit; cursor: pointer;
+    padding: 11px 2px; margin-right: 22px; font-size: 15px; font-weight: 700; color: var(--ink-soft);
+    border-bottom: 2.5px solid transparent; transition: color .12s, border-color .12s;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent-deep); border-bottom-color: var(--accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .panel[hidden] { display: none; }
+
+  /* margin panel extras */
+  .payhero.fail { background: linear-gradient(160deg, var(--crit-wash), var(--surface)); border-color: var(--crit); }
+  .payhero.fail .lbl { color: var(--crit); }
+  .meter { height: 13px; border-radius: 20px; background: var(--surface-2); overflow: visible; margin: 6px 0 8px; position: relative; }
+  .meter-fill { height: 100%; border-radius: 20px; transition: width .25s ease, background .25s ease; }
+  .meter-target { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); opacity: .6; }
+  .meter-wrap .cap { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">Glongnom · Delivery Economics</span>
+    <h1>เครื่องคำนวณค่าจ้าง Rider ส่งเอง</h1>
+    <p class="sub">คำนวณค่ารอบ / ค่าส่งลูกค้า / ภาระร้าน รายหอพักรอบ มธ.รังสิต — แก้ระยะทางหรือเพิ่มหอพักได้เอง. เทียบกับ benchmark จริงของ LINE MAN โซนเขียว (ปทุมธานี/รังสิต).</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="โหมดคำนวณ">
+    <button role="tab" id="tab-rider" aria-selected="true" aria-controls="panel-rider">🛵 ค่าจ้าง Rider (รายหอพัก)</button>
+    <button role="tab" id="tab-margin" aria-selected="false" aria-controls="panel-margin">🧋 Margin &amp; Basket</button>
+  </nav>
+
+  <div id="panel-rider" class="panel" role="tabpanel" aria-labelledby="tab-rider">
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="card">
+      <h2>1 · ตั้งค่าการคำนวณ</h2>
+
+      <div class="origin">
+        <span class="pin">📍</span>
+        <span>จุดรับ (ร้าน): <b>Glongnom @ Dcondo Dome Rangsit</b> — ตรงข้าม มธ.รังสิต (ประตูเชียงราก)</span>
+      </div>
+
+      <div class="field">
+        <label>ช่วงเวลา / สภาพอากาศ <span class="hint" style="margin:0;font-weight:400;">(บวกเข้าค่ารอบทุกหอ)</span></label>
+        <div class="seg" id="segTime" role="group" aria-label="ช่วงเวลา">
+          <button data-v="0" aria-pressed="true">ปกติ</button>
+          <button data-v="5" aria-pressed="false">Peak +5</button>
+          <button data-v="10" aria-pressed="false">ฝน +10</button>
+          <button data-v="15" aria-pressed="false">Peak+ฝน +15</button>
+        </div>
+        <div class="hint">Peak = 11:00–13:00 และ 17:00–20:00 · โบนัสนี้ร้านรับภาระ (ค่าส่งลูกค้าไม่เกิน 15฿)</div>
+      </div>
+
+      <div class="mini-label" style="margin-bottom:8px;">ค่าส่งที่เก็บลูกค้า (ตามระยะทาง)</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div class="field" style="margin:0;">
+          <label for="fee01" style="display:block;">ใกล้ 0–1 กม.</label>
+          <input type="number" id="fee01" min="0" step="1" value="10">
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="fee13" style="display:block;">กลาง 1–3 กม.</label>
+          <input type="number" id="fee13" min="0" step="1" value="15">
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="fee3" style="display:block;">ไกล 3+ กม.</label>
+          <input type="number" id="fee3" min="0" step="1" value="20">
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px;">ค่ารอบไรเดอร์ = ฐาน 25฿ (รวม 3 กม.แรก) + 6฿/กม. ส่วนที่เกิน 3 กม. + โบนัสเวลา — และ<b>กำหนดเองรายหอได้</b>ในช่องสีเขียวในตาราง</div>
+    </section>
+
+    <!-- ============ DORM TABLE ============ -->
+    <section class="card tablecard">
+      <h2>2 · ค่ารอบ &amp; ค่าส่ง รายหอพัก / คอนโด</h2>
+      <div class="scroll">
+        <table id="dormTable">
+          <thead>
+            <tr>
+              <th>หอพัก / คอนโด</th>
+              <th style="text-align:right;">ระยะทาง (กม.)</th>
+              <th style="text-align:right;">ค่ารอบไรเดอร์ <span style="font-weight:400;text-transform:none;letter-spacing:0;">(แก้ได้)</span></th>
+              <th class="n">ค่าส่งลูกค้า</th>
+              <th class="n">ภาระค่าส่งร้าน</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody><!-- filled by JS --></tbody>
+          <tfoot>
+            <tr>
+              <td>เฉลี่ย (<span id="dormCount">0</span> หอ)</td>
+              <td class="n" id="avgDist">–</td>
+              <td class="n" id="avgPay">–</td>
+              <td class="n" id="avgFee">–</td>
+              <td class="n" id="avgBurden">–</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px;">
+        ระยะทางเป็น <b>ค่าประมาณ</b> (แก้ได้ในช่อง) — กดที่ตัวเลขเพื่อพิมพ์ระยะจริงจาก Google Maps. ค่ารอบ/ค่าส่ง/ภาระร้าน จะคำนวณใหม่ทันที.
+      </p>
+    </section>
+
+    <!-- ============ ADD / AUTO-DISTANCE ============ -->
+    <section class="card tablecard">
+      <h2>3 · เพิ่มหอพัก</h2>
+      <div class="addform">
+        <div>
+          <div class="mini-label">ชื่อหอพัก / คอนโด</div>
+          <input type="text" id="newName" placeholder="เช่น U Delight Rangsit">
+        </div>
+        <div>
+          <div class="mini-label">ระยะทาง (กม.)</div>
+          <input type="number" id="newDist" min="0" step="0.1" placeholder="2.0">
+        </div>
+        <button class="addbtn" id="addBtn">+ เพิ่ม</button>
+      </div>
+
+      <div class="foothead" style="margin-top:22px;">คำนวณระยะทางอัตโนมัติจากพิกัด (ไม่บังคับ)</div>
+      <p class="hint" style="margin-top:6px;">เปิด Google Maps → คลิกขวาที่หมุดปลายทาง → ก๊อปพิกัด (เช่น <code>14.073, 100.615</code>) มาวาง แล้วกด "คำนวณ" ระบบจะเติมช่องระยะทางให้ (สูตร Haversine × 1.3 ชดเชยเส้นถนน).</p>
+      <div class="two" style="margin-top:10px;">
+        <div class="field" style="margin:0;">
+          <label for="shopCoord" style="display:block;">พิกัดร้าน (lat, lng)</label>
+          <input type="text" id="shopCoord" value="14.0728, 100.6155">
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="destCoord" style="display:block;">พิกัดปลายทาง (lat, lng)</label>
+          <input type="text" id="destCoord" placeholder="14.073, 100.615">
+        </div>
+      </div>
+      <button class="addbtn ghost" id="calcBtn" style="margin-top:12px;">คำนวณระยะ → เติมช่องด้านบน</button>
+      <span id="calcOut" class="hint" style="margin-left:10px;"></span>
+      <p class="hint" style="margin-top:10px;">⚠️ พิกัดร้าน default เป็นค่าประมาณ — แก้ให้ตรงจริงของ Dcondo Dome ก่อนใช้คำนวณอัตโนมัติ.</p>
+    </section>
+
+    <!-- ============ BACKUP / IMPORT ============ -->
+    <section class="card tablecard">
+      <h2>4 · สำรอง / นำเข้าข้อมูล (กันข้อมูลหาย)</h2>
+      <div class="savebanner">💾 ตอนนี้ระบบ<b style="color:var(--ink)">&nbsp;บันทึกอัตโนมัติในเบราว์เซอร์นี้แล้ว</b>&nbsp;— รีเฟรช/ปิดเปิดใหม่ข้อมูลจะไม่หาย</div>
+      <p class="hint" style="margin-top:0;">แนะนำให้กด "ดาวน์โหลด CSV" เก็บไฟล์สำรองไว้ด้วย เผื่อเปลี่ยนเครื่อง/ล้างแคช (localStorage เป็นของเบราว์เซอร์เครื่องนี้เท่านั้น).</p>
+      <button class="addbtn ghost" id="exportBtn" style="margin-top:6px;">⬇ ดาวน์โหลด CSV (สำรอง)</button>
+
+      <div class="foothead" style="margin-top:22px;">นำเข้ารายการ — วางจาก Excel / Google Sheets ได้เลย</div>
+      <p class="hint" style="margin-top:6px;">แต่ละบรรทัด: <code>ชื่อหอ, ระยะทาง</code> หรือ <code>ชื่อหอ, ระยะทาง, ค่ารอบกำหนดเอง</code> — คั่นด้วยจุลภาค (,) หรือ Tab. บรรทัดหัวตาราง/ที่อ่านไม่ได้จะถูกข้ามอัตโนมัติ.</p>
+      <textarea id="importText" placeholder="Kave TU, 0.6&#10;U Delight Rangsit, 2.1&#10;หอลุงควร, 1.4, 30"></textarea>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <select id="importMode" aria-label="โหมดนำเข้า">
+          <option value="append">เพิ่มต่อท้ายรายการเดิม</option>
+          <option value="replace">แทนที่รายการทั้งหมด</option>
+        </select>
+        <button class="addbtn" id="importBtn">+ นำเข้ารายการ</button>
+        <span id="importMsg" class="hint" style="margin:0;"></span>
+      </div>
+    </section>
+
+    <!-- ============ BENCHMARK ============ -->
+    <section class="card tablecard">
+      <h2>5 · Benchmark จริง — ค่ารอบที่ rider ได้จากแพลตฟอร์ม</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>แพลตฟอร์ม / โซน</th><th class="n">ค่ารอบเริ่มต้น</th><th>ระยะทางเพิ่ม</th><th>ออร์เดอร์พ่วง</th><th>หมายเหตุ</th></tr>
+          </thead>
+          <tbody>
+            <tr class="hl">
+              <td><b>LINE MAN — โซนเขียว</b><br><span style="color:var(--ink-soft);font-size:12px;">ปทุมธานี / รังสิต (โซนคุณ)</span></td>
+              <td class="n">37 ฿</td><td>ตามระยะที่แอปโชว์</td><td>~15–17 ฿</td><td>ฐานปี 2566</td>
+            </tr>
+            <tr><td>LINE MAN — โซนแดง (ย่านธุรกิจ)</td><td class="n">43 ฿</td><td>+ ระยะทาง</td><td>~15–17 ฿</td><td>บางรัก/สาทร ฯลฯ</td></tr>
+            <tr><td>LINE MAN — โซนเหลือง (กทม.ทั่วไป)</td><td class="n">38 ฿</td><td>+ ระยะทาง</td><td>~15–17 ฿</td><td>—</td></tr>
+            <tr><td>LINE MAN — กทม.+ปริมณฑล (หลังลด เม.ย. 68)</td><td class="n">~28 ฿</td><td>+ ระยะทาง</td><td>ลดลง</td><td><span class="chip red">ลดลงเรื่อยๆ</span></td></tr>
+            <tr><td>Grab Bike (โครงสร้างค่าส่ง)</td><td class="n">~20 ฿</td><td>~9 ฿/กม.</td><td>งาน Walk ระยะสั้น</td><td>ค่าลูกค้าจ่าย</td></tr>
+            <tr><td>ค่าระยะทาง LINE MAN (ส่วนเกิน)</td><td class="n">—</td><td>~7 ฿/กม. (เกิน 2 กม.)</td><td>—</td><td>อ้างอิงโครงสร้างค่าบริการ</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px;">
+        ค่ารอบที่ร้านตั้ง (25–37฿ ในรัศมี 5 กม.) อยู่ในระดับ <b>พอๆ กับแอพ</b> — แต่เพราะหอพักกระจุกใกล้ร้าน rider วิ่งได้ถี่ รายได้/ชม. จึงดีกว่าไปวิ่งแอพ.
+      </p>
+    </section>
+
+    <div class="foothead">สูตรที่ใช้</div>
+    <div class="formula">
+      ค่ารอบไรเดอร์ = 25฿ + 6฿ × (ระยะทาง − 3 กม. ถ้าเกิน) + โบนัสเวลา &nbsp;<b>หรือกำหนดเองรายหอ</b><br>
+      ค่าส่งลูกค้า = 10฿ (0–1 กม.) / 15฿ (1–3 กม.) / 20฿ (3+ กม.)<br>
+      ภาระค่าส่งร้าน = ค่ารอบไรเดอร์ − ค่าส่งลูกค้า
+    </div>
+  </div><!-- /panel-rider -->
+
+  <!-- ================= PANEL: MARGIN & BASKET ================= -->
+  <div id="panel-margin" class="panel" role="tabpanel" aria-labelledby="tab-margin" hidden>
+    <div class="grid">
+      <!-- inputs -->
+      <section class="card" aria-label="ตั้งราคาและตะกร้า">
+        <h2>1 · ราคา &amp; ตะกร้า</h2>
+
+        <div class="field">
+          <label for="mcost">ต้นทุนวัตถุดิบ/แก้ว (food cost) <span class="val">฿<span id="mcostVal">30</span></span></label>
+          <input type="range" id="mcost" min="15" max="45" step="1" value="30">
+          <div class="hint">ช่วงของคุณ 25–35฿ · อย่าลืมบวกแพ็กเกจจิ้ง (แก้ว/ฝา/หลอด/ถุง ~5–8฿) ถ้ายังไม่รวม</div>
+        </div>
+
+        <div class="field">
+          <label for="mprice">ราคาขาย/แก้ว <span class="val">฿<span id="mpriceVal">75</span></span></label>
+          <input type="range" id="mprice" min="45" max="120" step="1" value="75">
+          <div class="hint">Keystone = 2× food cost. เส้นประในกราฟคือจุดนี้</div>
+        </div>
+
+        <div class="field">
+          <label for="mcups">จำนวนแก้ว/ออร์เดอร์ (basket) <span class="val"><span id="mcupsVal">2</span> แก้ว</span></label>
+          <input type="range" id="mcups" min="1" max="8" step="1" value="2">
+          <div class="hint">ตัวแปรชี้ขาด — ยิ่งมาก ส่วนต่างค่าส่งยิ่งเจือจาง</div>
+        </div>
+
+        <div class="field">
+          <label for="mtarget">เป้า margin (contribution) <span class="val"><span id="mtargetVal">50</span>%</span></label>
+          <input type="range" id="mtarget" min="30" max="70" step="1" value="50">
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--hair);margin:20px 0;">
+        <h2 style="margin-bottom:14px;">2 · ค่าส่ง</h2>
+        <div class="two">
+          <div class="field" style="margin:0;">
+            <label for="mrider" style="display:block;">ค่ารอบไรเดอร์</label>
+            <input type="number" id="mrider" min="0" step="1" value="30">
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="mfee" style="display:block;">ค่าส่งลูกค้า (cap)</label>
+            <input type="number" id="mfee" min="0" step="5" value="15">
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label for="mfree" style="display:block;">ยอดขั้นต่ำ "ส่งฟรี"</label>
+          <input type="number" id="mfree" min="0" step="10" value="250">
+          <div class="hint">เกินยอดนี้ ลูกค้าจ่ายค่าส่ง ฿0 (ร้านรับภาระค่ารอบเต็ม)</div>
+        </div>
+      </section>
+
+      <!-- results -->
+      <section class="card" aria-label="ผล margin">
+        <h2>3 · ผลต่อออร์เดอร์นี้</h2>
+        <div class="payhero" id="mHero">
+          <div class="lbl">Contribution margin</div>
+          <div class="big tnum"><span id="mMarginBig">50</span><small>%</small></div>
+          <div class="note" id="mVerdict">ถึงเป้าแล้ว</div>
+        </div>
+
+        <div class="meter-wrap">
+          <div class="meter"><div class="meter-fill" id="mMeter"></div><div class="meter-target" id="mMeterTarget"></div></div>
+          <div class="cap"><span>0%</span><span id="mMeterCap">เป้า 50%</span><span>100%</span></div>
+        </div>
+
+        <div class="rows" id="mBreakdown" style="margin-top:14px;"></div>
+
+        <div class="monthly" id="mMinCups" style="margin-top:16px;"></div>
+      </section>
+    </div>
+
+    <!-- margin-by-basket table -->
+    <section class="card tablecard">
+      <h2>4 · margin ตามขนาดตะกร้า (ที่ราคาปัจจุบัน)</h2>
+      <div class="scroll">
+        <table id="mTable">
+          <thead>
+            <tr><th>แก้ว/ออร์เดอร์</th><th class="n">ยอดออร์เดอร์</th><th>ค่าส่งลูกค้า</th><th class="n">margin</th><th>สถานะ</th></tr>
+          </thead>
+          <tbody><!-- filled by JS --></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px;">
+        สังเกต: ตอนข้ามเส้น "ส่งฟรี" margin อาจสะดุดลงนิดเพราะร้านรับค่ารอบเต็ม แต่ตะกร้าที่ใหญ่ขึ้นจะดึงกลับมาเกินเป้าอย่างรวดเร็ว.
+      </p>
+    </section>
+
+    <div class="foothead">สูตรที่ใช้</div>
+    <div class="formula">
+      margin = ( ยอดออร์เดอร์ − ต้นทุนวัตถุดิบ − ภาระค่าส่งของร้าน ) ÷ ยอดออร์เดอร์<br>
+      ภาระค่าส่งของร้าน = ค่ารอบไรเดอร์ − ค่าส่งที่เก็บลูกค้า (=0 เมื่อสั่งครบยอดส่งฟรี)<br>
+      แก้วขั้นต่ำที่คุ้มเป้า t: &nbsp; n ≥ (ค่ารอบ − ค่าส่งลูกค้า) ÷ ( t·ราคา − ต้นทุน )
+    </div>
+  </div><!-- /panel-margin -->
+
+  <p class="disclaimer">
+    รายชื่อหอพัก/คอนโด อ้างอิงแหล่งที่พักจริงรอบ มธ.ศูนย์รังสิต (RentHub, PropertyHub ฯลฯ) — ระยะทางเป็นค่าประมาณเบื้องต้น โปรดปรับให้ตรงจริงจาก Google Maps. ตัวเลข benchmark ค่ารอบอ้างอิงประกาศ LINE MAN Rider (ฐานปี 2566), Rocket Media Lab (เม.ย. 2568) และโครงสร้างค่าบริการสาธารณะ — ใช้เป็นกรอบตัดสินใจ ไม่ใช่เรตทางการปัจจุบันแบบเป๊ะ.
+  </p>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function fmt(n) { return Math.round(n).toLocaleString('en-US'); }
+
+  /* =============== RIDER PAY — PER DORM =============== */
+  var BASE = 25, INCL = 3, PERKM = 6;
+  var g = { time: 0, fee01: 10, fee13: 15, fee3: 20 };
+
+  // starter list: real dorms/condos around TU Rangsit (distances = estimates, editable)
+  var STORAGE_KEY = 'glongnom_dorms_v1';
+  var DEFAULT_DORMS = [
+    { name: 'Kave TU / Kave AVA (ตรงข้าม มธ.)', dist: 0.6 },
+    { name: 'dcondo Campus Resort (เฟส 1–2)',    dist: 0.4 },
+    { name: 'dcondo Hideaway (เฟส 4)',           dist: 0.6 },
+    { name: 'Terra Residence',                   dist: 0.8 },
+    { name: '18-22 Residences',                  dist: 1.0 },
+    { name: 'Haus Private Residences',           dist: 1.1 },
+    { name: 'หอใน มธ. (โซนหอพักนักศึกษา)',        dist: 1.8 },
+    { name: 'หอพักหลวงสิริ (หลัง มธ.)',           dist: 1.5 },
+    { name: 'The Winner Mansion (รังสิตภิรมย์)',  dist: 2.2 },
+    { name: 'Plum Condo Park Rangsit',           dist: 2.5 },
+    { name: 'dcondo Shine Rangsit',              dist: 2.8 }
+  ];
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ dorms: dorms, fees: { fee01: g.fee01, fee13: g.fee13, fee3: g.fee3 } })); } catch (e) {}
+  }
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && Array.isArray(s.dorms) && s.dorms.length) {
+          if (s.fees) { g.fee01 = s.fees.fee01; g.fee13 = s.fees.fee13; g.fee3 = s.fees.fee3; }
+          return s.dorms;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_DORMS.slice();
+  }
+  var dorms = loadState();
+
+  function riderPay(dist) {
+    var over = dist > INCL ? Math.round(PERKM * (dist - INCL)) : 0;
+    return BASE + over + g.time;
+  }
+  // effective pay: manual override per dorm, else formula
+  function payOf(d) { return (d.pay != null) ? d.pay : riderPay(d.dist); }
+  function custFee(dist) {
+    if (dist <= 1) return g.fee01;
+    if (dist <= 3) return g.fee13;
+    return g.fee3;
+  }
+
+  function rowCells(i) {
+    var d = dorms[i], fee = custFee(d.dist);
+    // refresh formula-based pay input only when there's no manual override
+    if (d.pay == null) { var pinp = $('pay-' + i); if (pinp) pinp.value = riderPay(d.dist); }
+    $('fee-' + i).textContent = fee + ' ฿';
+    $('bur-' + i).textContent = (payOf(d) - fee) + ' ฿';
+  }
+
+  function updateAverages() {
+    var n = dorms.length;
+    if (!n) { ['avgDist','avgPay','avgFee','avgBurden'].forEach(function(id){ $(id).textContent='–'; }); $('dormCount').textContent=0; return; }
+    var sd=0,sp=0,sf=0,sb=0;
+    dorms.forEach(function(d){ var p=payOf(d),f=custFee(d.dist); sd+=d.dist; sp+=p; sf+=f; sb+=(p-f); });
+    $('dormCount').textContent = n;
+    $('avgDist').textContent = (sd/n).toFixed(1) + ' กม.';
+    $('avgPay').textContent = fmt(sp/n) + ' ฿';
+    $('avgFee').textContent = fmt(sf/n) + ' ฿';
+    $('avgBurden').textContent = fmt(sb/n) + ' ฿';
+  }
+
+  function buildDormTable() {
+    var body = '';
+    dorms.forEach(function (d, i) {
+      var pay = payOf(d), fee = custFee(d.dist);
+      body += '<tr>'
+        + '<td>' + d.name + '</td>'
+        + '<td style="text-align:right;"><input type="number" class="dist-inp tnum" data-i="' + i + '" min="0" step="0.1" value="' + d.dist + '"></td>'
+        + '<td style="text-align:right;"><input type="number" class="pay-inp tnum" id="pay-' + i + '" data-i="' + i + '" min="0" step="1" value="' + pay + '"></td>'
+        + '<td class="n" id="fee-' + i + '">' + fee + ' ฿</td>'
+        + '<td class="n" id="bur-' + i + '">' + (pay - fee) + ' ฿</td>'
+        + '<td><button class="icon-btn" data-del="' + i + '" title="ลบ" aria-label="ลบ ' + d.name + '">✕</button></td>'
+        + '</tr>';
+    });
+    $('dormTable').querySelector('tbody').innerHTML = body;
+    updateAverages();
+  }
+
+  // inline edit (keeps focus — only updates derived cells)
+  $('dormTable').addEventListener('input', function (e) {
+    var distInp = e.target.closest('.dist-inp');
+    var payInp = e.target.closest('.pay-inp');
+    if (distInp) {
+      var di = +distInp.dataset.i;
+      dorms[di].dist = parseFloat(distInp.value) || 0;
+      rowCells(di);
+      updateAverages();
+    } else if (payInp) {
+      var pi = +payInp.dataset.i;
+      var v = payInp.value.trim();
+      dorms[pi].pay = (v === '') ? null : (parseFloat(v) || 0); // empty = revert to formula
+      // update burden only; don't overwrite the field being typed in
+      $('bur-' + pi).textContent = (payOf(dorms[pi]) - custFee(dorms[pi].dist)) + ' ฿';
+      updateAverages();
+    } else { return; }
+    saveState();
+  });
+  // delete
+  $('dormTable').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-del]');
+    if (!b) return;
+    dorms.splice(+b.dataset.del, 1);
+    buildDormTable();
+    saveState();
+  });
+
+  // add dorm
+  $('addBtn').addEventListener('click', function () {
+    var name = $('newName').value.trim();
+    var dist = parseFloat($('newDist').value);
+    if (!name) { $('newName').focus(); return; }
+    if (isNaN(dist) || dist < 0) { $('newDist').focus(); return; }
+    dorms.push({ name: name, dist: dist });
+    $('newName').value = ''; $('newDist').value = '';
+    buildDormTable();
+    saveState();
+    $('newName').focus();
+  });
+  $('newName').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('addBtn').click(); });
+  $('newDist').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('addBtn').click(); });
+
+  // auto-distance from coordinates (Haversine + road factor)
+  function parseCoord(s) {
+    var m = (s || '').split(',');
+    if (m.length !== 2) return null;
+    var a = parseFloat(m[0]), b = parseFloat(m[1]);
+    if (isNaN(a) || isNaN(b)) return null;
+    return [a, b];
+  }
+  function haversineKm(p1, p2) {
+    var R = 6371, toRad = function (x) { return x * Math.PI / 180; };
+    var dLat = toRad(p2[0] - p1[0]), dLng = toRad(p2[1] - p1[1]);
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+          + Math.cos(toRad(p1[0])) * Math.cos(toRad(p2[0])) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  }
+  $('calcBtn').addEventListener('click', function () {
+    var shop = parseCoord($('shopCoord').value), dest = parseCoord($('destCoord').value);
+    var out = $('calcOut');
+    if (!shop || !dest) { out.style.color = 'var(--crit)'; out.textContent = 'พิกัดไม่ถูกต้อง — ใส่รูปแบบ 14.073, 100.615'; return; }
+    var straight = haversineKm(shop, dest);
+    var road = straight * 1.3;
+    $('newDist').value = road.toFixed(1);
+    out.style.color = 'var(--accent-deep)';
+    out.textContent = 'เส้นตรง ' + straight.toFixed(2) + ' กม. → ประมาณถนน ' + road.toFixed(1) + ' กม. (เติมให้แล้ว กด "เพิ่ม")';
+  });
+
+  // global controls
+  (function () {
+    var grp = $('segTime');
+    grp.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        grp.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+        b.setAttribute('aria-pressed', 'true');
+        g.time = parseFloat(b.dataset.v);
+        buildDormTable();
+      });
+    });
+  })();
+  $('fee01').addEventListener('input', function () { g.fee01 = parseFloat(this.value) || 0; buildDormTable(); saveState(); });
+  $('fee13').addEventListener('input', function () { g.fee13 = parseFloat(this.value) || 0; buildDormTable(); saveState(); });
+  $('fee3').addEventListener('input', function () { g.fee3 = parseFloat(this.value) || 0; buildDormTable(); saveState(); });
+
+  // reflect any restored fee settings back into the inputs
+  $('fee01').value = g.fee01; $('fee13').value = g.fee13; $('fee3').value = g.fee3;
+
+  // ---- backup / import ----
+  function parseCells(line) {
+    if (line.indexOf('\t') >= 0) return line.split('\t');
+    var out = [], cur = '', inq = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (inq) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inq = false; } else cur += c; }
+      else { if (c === '"') inq = true; else if (c === ',') { out.push(cur); cur = ''; } else cur += c; }
+    }
+    out.push(cur); return out;
+  }
+  $('exportBtn').addEventListener('click', function () {
+    var lines = ['name,distance_km,custom_pay'];
+    dorms.forEach(function (d) {
+      lines.push('"' + String(d.name).replace(/"/g, '""') + '",' + d.dist + ',' + (d.pay != null ? d.pay : ''));
+    });
+    var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'glongnom-dorms.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+  $('importBtn').addEventListener('click', function () {
+    var txt = $('importText').value.replace(/^﻿/, '').trim();
+    var msg = $('importMsg');
+    if (!txt) { msg.style.color = 'var(--crit)'; msg.textContent = 'ยังไม่มีข้อความให้นำเข้า'; return; }
+    var mode = $('importMode').value;
+    var added = [];
+    txt.split(/\r?\n/).forEach(function (line) {
+      if (!line.trim()) return;
+      var p = parseCells(line);
+      if (p.length < 2) return;
+      var name = p[0].trim().replace(/^"|"$/g, '');
+      var dist = parseFloat(p[1]);
+      if (!name || isNaN(dist)) return; // skips header row / bad lines
+      var pay = (p.length >= 3 && p[2].trim() !== '') ? parseFloat(p[2]) : null;
+      var row = { name: name, dist: dist };
+      if (pay != null && !isNaN(pay)) row.pay = pay;
+      added.push(row);
+    });
+    if (!added.length) { msg.style.color = 'var(--crit)'; msg.textContent = 'อ่านข้อมูลไม่ได้ — ตรวจรูปแบบ: ชื่อหอ, ระยะทาง'; return; }
+    dorms = (mode === 'replace') ? added : dorms.concat(added);
+    saveState(); buildDormTable();
+    $('importText').value = '';
+    msg.style.color = 'var(--accent-deep)';
+    msg.textContent = (mode === 'replace' ? 'แทนที่เป็น ' : 'เพิ่ม ') + added.length + ' หอเรียบร้อย ✓';
+  });
+
+  buildDormTable();
+
+  /* =============== MARGIN & BASKET =============== */
+  var m = { cost: 30, price: 75, cups: 2, target: 50, rider: 30, fee: 15, free: 250 };
+
+  function marginAt(n) {
+    var orderVal = n * m.price;
+    var isFree = orderVal >= m.free;
+    var custFeeM = isFree ? 0 : m.fee;
+    var burden = m.rider - custFeeM;
+    var profit = orderVal - n * m.cost - burden;
+    return { orderVal: orderVal, isFree: isFree, custFee: custFeeM, burden: burden,
+             food: n * m.cost, profit: profit, margin: orderVal > 0 ? profit / orderVal * 100 : 0 };
+  }
+
+  function renderMargin() {
+    $('mcostVal').textContent = m.cost;
+    $('mpriceVal').textContent = m.price;
+    $('mcupsVal').textContent = m.cups;
+    $('mtargetVal').textContent = m.target;
+
+    var res = marginAt(m.cups);
+    var pass = res.margin >= m.target;
+
+    $('mMarginBig').textContent = Math.round(res.margin);
+    $('mHero').className = 'payhero ' + (pass ? '' : 'fail');
+    $('mVerdict').textContent = pass
+      ? '✅ ถึงเป้า ' + m.target + '% — ออร์เดอร์นี้ทุกคนชนะ (กำไร ฿' + fmt(res.profit) + '/ออร์เดอร์)'
+      : '⚠️ ต่ำกว่าเป้า ' + m.target + '% — ตะกร้าเล็กไป หรือราคาต่ำไปเทียบ food cost';
+
+    var mf = $('mMeter');
+    mf.style.width = Math.max(0, Math.min(100, res.margin)) + '%';
+    mf.style.background = pass ? 'var(--good)' : 'var(--crit)';
+    $('mMeterTarget').style.left = m.target + '%';
+    $('mMeterCap').textContent = 'เป้า ' + m.target + '%';
+
+    var rows = [
+      ['ยอดออร์เดอร์ (' + m.cups + ' × ฿' + m.price + ')', '+' + fmt(res.orderVal), false],
+      ['ต้นทุนวัตถุดิบ (' + m.cups + ' × ฿' + m.cost + ')', '−' + fmt(res.food), false],
+      ['ภาระค่าส่งของร้าน' + (res.isFree ? ' (ส่งฟรี)' : ' (ค่ารอบ ฿' + m.rider + ' − ลูกค้า ฿' + res.custFee + ')'), '−' + fmt(res.burden), false],
+      ['กำไรต่อออร์เดอร์', fmt(res.profit) + ' ฿', true]
+    ];
+    var html = '';
+    rows.forEach(function (r) {
+      html += '<div class="row' + (r[2] ? ' total' : '') + '"><span class="k">' + r[0] +
+              '</span><span class="v tnum">' + r[1] + (r[2] ? '' : ' ฿') + '</span></div>';
+    });
+    $('mBreakdown').innerHTML = html;
+
+    var need = 0;
+    for (var i = 1; i <= 30; i++) { if (marginAt(i).margin >= m.target) { need = i; break; } }
+    var mc = $('mMinCups');
+    if (need === 0) {
+      mc.innerHTML = 'ที่ราคานี้ <b style="color:var(--crit)">ไปไม่ถึงเป้า ' + m.target + '%</b> ไม่ว่าตะกร้าใหญ่แค่ไหน → ต้องขึ้นราคา/ขั้นต่ำ ฿' + (2 * m.cost) + '+ ต่อแก้ว';
+    } else {
+      var ov = need * m.price;
+      mc.innerHTML = 'ต้องขายอย่างน้อย <span class="m-big tnum">' + need + ' แก้ว</span> (ยอด ฿' + fmt(ov) +
+                     ') ถึงจะได้ margin ' + m.target + '%<div class="hint" style="margin-top:4px;">ตั้งเป็นเกณฑ์ <b>ขั้นต่ำสำหรับส่ง</b> ได้เลย</div>';
+    }
+
+    var body = '';
+    for (var k = 1; k <= 6; k++) {
+      var rr = marginAt(k);
+      var ok = rr.margin >= m.target;
+      body += '<tr' + (ok ? ' class="hl"' : '') + '><td>' + k + ' แก้ว</td><td class="n">' + fmt(rr.orderVal) +
+              ' ฿</td><td>' + (rr.isFree ? '<span class="chip green">ฟรี</span>' : fmt(rr.custFee) + ' ฿') +
+              '</td><td class="n">' + Math.round(rr.margin) + '%</td><td>' +
+              (ok ? '<span class="chip green">✓ ถึงเป้า</span>' : '<span class="chip red">ต่ำไป</span>') + '</td></tr>';
+    }
+    document.querySelector('#mTable tbody').innerHTML = body;
+  }
+
+  [['mcost', 'cost'], ['mprice', 'price'], ['mcups', 'cups'], ['mtarget', 'target']].forEach(function (pair) {
+    $(pair[0]).addEventListener('input', function () { m[pair[1]] = parseFloat(this.value); renderMargin(); });
+  });
+  [['mrider', 'rider'], ['mfee', 'fee'], ['mfree', 'free']].forEach(function (pair) {
+    $(pair[0]).addEventListener('input', function () { m[pair[1]] = parseFloat(this.value) || 0; renderMargin(); });
+  });
+
+  /* =============== TABS =============== */
+  function selectTab(which) {
+    var isRider = which === 'rider';
+    $('tab-rider').setAttribute('aria-selected', isRider);
+    $('tab-margin').setAttribute('aria-selected', !isRider);
+    $('panel-rider').hidden = !isRider;
+    $('panel-margin').hidden = isRider;
+  }
+  $('tab-rider').addEventListener('click', function () { selectTab('rider'); });
+  $('tab-margin').addEventListener('click', function () { selectTab('margin'); });
+
+  renderMargin();
+})();
+</script>
+
+</body>
+</html>

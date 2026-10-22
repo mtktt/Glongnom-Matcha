@@ -346,6 +346,7 @@
   <nav class="sidebar-nav">
     <div class="sidebar-group-label">Management</div>
     <a href="/admin/orders.html">&#129534; Order Queue</a>
+    <a href="/admin/rider.html">&#128757; Riders</a>
     <a href="/admin/">&#128203; Menu Management</a>
     <a href="/admin/options.html">&#9881;&#65039; Options</a>
     <a href="/admin/customers.html" class="active">&#127919; Customers</a>
@@ -486,6 +487,10 @@
   function fmtNum(n) {
     const v = Number(n);
     return isNaN(v) ? '0' : v.toLocaleString('en-US');
+  }
+  function fmtBaht(n) {
+    const v = Number(n);
+    return '฿' + (isNaN(v) ? '0' : v.toLocaleString('en-US', { maximumFractionDigits: 0 }));
   }
 
   // ── TIER BADGE ─────────────────────────────────────────────
@@ -662,24 +667,26 @@
     const avgOrder     = totalOrders > 0 ? totalSpent / totalOrders : 0;
     const memberSince  = fmtDate(customer.created_at);
 
-    // Progress bar
+    // Progress bar — tier is earned by LIFETIME SPEND, not points (migration
+    // 035). Points are the reward currency and get deducted on redemption, so
+    // they can't also drive status. Thresholds must match tier_for_spend().
     let progressHtml = '';
     if (tier === 'gold') {
       progressHtml = `<div class="progress-max-label">&#9733; Max tier reached — Gold member</div>`;
     } else {
       const nextTier   = tier === 'bronze' ? 'silver' : 'gold';
-      const target     = tier === 'bronze' ? 300 : 1000;
-      const base       = tier === 'bronze' ? 0   : 300;
-      const pct        = Math.min(100, ((pts - base) / (target - base)) * 100);
-      const remaining  = Math.max(0, target - pts);
+      const target     = tier === 'bronze' ? 1500 : 3000;
+      const base       = tier === 'bronze' ? 0    : 1500;
+      const pct        = Math.min(100, ((totalSpent - base) / (target - base)) * 100);
+      const remaining  = Math.max(0, target - totalSpent);
       progressHtml = `
         <div class="progress-wrap">
           <div class="progress-label">
-            <span>${pts} pts</span>
-            <span>${target} pts for ${nextTier.charAt(0).toUpperCase() + nextTier.slice(1)}</span>
+            <span>${fmtBaht(totalSpent)} spent</span>
+            <span>${fmtBaht(target)} for ${nextTier.charAt(0).toUpperCase() + nextTier.slice(1)}</span>
           </div>
           <div class="progress-bar"><div class="progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${fmtNum(remaining)} pts to go</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${fmtBaht(remaining)} to go</div>
         </div>`;
     }
 

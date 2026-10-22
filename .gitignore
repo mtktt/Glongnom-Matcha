@@ -13,3 +13,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# Local index.html snapshots (restore copies, not source)
+backups/

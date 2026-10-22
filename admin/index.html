@@ -203,6 +203,8 @@
       transition: left 0.18s; left: 3px; pointer-events: none;
     }
     .status-toggle.on .status-toggle-knob { left: 21px; }
+    /* Pre-order toggle — same switch, amber "on" state to tell it apart from Status */
+    .status-toggle.preorder.on { background: #f59e0b; }
     .actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; white-space: nowrap; }
     .action-menu-wrap { position: relative; display: inline-block; }
     .action-dropdown {
@@ -371,6 +373,7 @@
     }
     .promo-type-badge.item-discount { background: #fee2e2; color: #b91c1c; }
     .promo-type-badge.bundle        { background: #ede9fe; color: #6d28d9; }
+    .promo-type-badge.free-delivery { background: #d1fae5; color: #047857; }
     .promo-discount-big { font-size: 28px; font-weight: 800; color: #ef4444; line-height: 1; }
     .promo-bundle-price { font-size: 28px; font-weight: 800; color: #7c3aed; line-height: 1; }
     .promo-menus {
@@ -400,6 +403,27 @@
     .settings-card-title { font-weight: 700; font-size: var(--text-base); color: var(--text-primary); margin-bottom: 4px; }
     .settings-card-desc  { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 12px; }
     .settings-field-row  { display: flex; align-items: center; gap: 10px; }
+
+    /* ---- DELIVERY ZONES ---- */
+    .dz-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: var(--space-5);
+      box-shadow: var(--shadow-sm); max-width: 640px;
+    }
+    .dz-card-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+    .dz-add-row {
+      display: flex; gap: 10px; align-items: center; margin-bottom: 18px;
+      padding-bottom: 18px; border-bottom: 1.5px dashed var(--border);
+    }
+    .dz-add-row .form-input:first-child { flex: 1; }
+    .dz-fee-input {
+      width: 90px; text-align: center; padding: 6px 8px !important;
+    }
+    .dz-name-cell { font-weight: 500; color: var(--text-primary); }
+    @media (max-width: 640px) {
+      .dz-add-row { flex-wrap: wrap; }
+      .dz-add-row .form-input:first-child { flex: 1 1 100%; }
+    }
 
     /* Menu checkbox list in promo modal */
     .menu-check-list {
@@ -434,11 +458,13 @@
       .page-tabs-row::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
       .page-tab, .tab { white-space: nowrap; flex-shrink: 0; }
 
-      /* Compact table — hide secondary columns on phone, keep Photo / Name / Price / Status / Actions */
+      /* Compact table — hide secondary columns on phone, keep Photo / Name / Price / Status / Actions.
+         Pre-order (col 9) is hidden too; set it from the row's Edit modal on mobile. */
       table thead th:nth-child(1), table tbody td:nth-child(1),
       table thead th:nth-child(4), table tbody td:nth-child(4),
       table thead th:nth-child(6), table tbody td:nth-child(6),
-      table thead th:nth-child(7), table tbody td:nth-child(7) { display: none; }
+      table thead th:nth-child(7), table tbody td:nth-child(7),
+      table thead th:nth-child(9), table tbody td:nth-child(9) { display: none; }
       table thead th, table tbody td { padding: 10px var(--space-3); font-size: var(--text-sm); }
       .menu-img { width: 36px; height: 36px; }
 
@@ -486,6 +512,7 @@
   <nav class="sidebar-nav">
     <div class="sidebar-group-label">Management</div>
     <a href="/admin/orders.html">&#129534; Order Queue</a>
+    <a href="/admin/rider.html">&#128757; Riders</a>
     <a href="/admin/" class="active">&#128203; Menu Management</a>
     <a href="/admin/options.html">&#9881;&#65039; Options</a>
     <a href="/admin/customers.html">&#127919; Customers</a>
@@ -555,14 +582,15 @@
             <th>Cost (฿)</th>
             <th title="Ingredient cost only. Does not include labor or overhead.">FC%</th>
             <th>Status</th>
+            <th title="Toggle whether this item is open for pre-order. Pre-order items stay orderable even while the shop is closed.">Pre-order</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="menuTableBody">
-          <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
-          <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
-          <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
-          <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+          <tr><td colspan="10"><div class="skeleton skeleton-row"></div></td></tr>
+          <tr><td colspan="10"><div class="skeleton skeleton-row"></div></td></tr>
+          <tr><td colspan="10"><div class="skeleton skeleton-row"></div></td></tr>
+          <tr><td colspan="10"><div class="skeleton skeleton-row"></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -580,17 +608,36 @@
 
   <!-- ════════════ SETTINGS SECTION ════════════ -->
   <div id="settingsSection" style="display:none;">
-    <div class="settings-section-wrap">
-      <div class="settings-card">
+    <div class="dz-card">
+      <div class="dz-card-head">
         <div class="settings-card-icon">&#128666;</div>
-        <div class="settings-card-body">
-          <div class="settings-card-title">ค่าจัดส่ง (บาท / ออเดอร์)</div>
-          <div class="settings-card-desc">ค่าส่งที่คิดกับลูกค้าทุกออเดอร์ ตั้งค่า 0 เพื่อไม่คิดค่าจัดส่ง</div>
-          <div class="settings-field-row">
-            <input type="number" id="deliveryFeeInput" class="form-input" min="0" step="1" style="max-width:110px;text-align:center;" placeholder="10">
-            <button class="btn btn-primary" onclick="saveDeliveryFee()">บันทึก</button>
-          </div>
+        <div>
+          <div class="settings-card-title">ค่าจัดส่งตามหอพัก / คอนโด</div>
+          <div class="settings-card-desc">กำหนดค่าส่งของแต่ละที่อยู่ที่ลูกค้าเลือกตอนสั่ง แก้ค่าส่งแล้วบันทึกอัตโนมัติ</div>
         </div>
+      </div>
+
+      <!-- Add new dorm -->
+      <div class="dz-add-row">
+        <input type="text" id="dzNewName" class="form-input" placeholder="ชื่อหอพัก / คอนโด (เช่น Kave TU)">
+        <input type="number" id="dzNewFee" class="form-input" min="0" step="1" placeholder="ค่าส่ง" style="max-width:120px;">
+        <button class="btn btn-primary" onclick="addDeliveryZone()">+ เพิ่มหอใหม่</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>หอพัก / คอนโด</th>
+              <th style="width:130px;">ค่าส่ง (บาท)</th>
+              <th style="width:80px;text-align:center;">แสดง</th>
+              <th style="width:80px;"></th>
+            </tr>
+          </thead>
+          <tbody id="dzTableBody">
+            <tr><td colspan="4"><div class="skeleton skeleton-row"></div></td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div><!-- /settingsSection -->
@@ -633,10 +680,47 @@
       <label>Description (optional)</label>
       <textarea id="fDesc" rows="2" placeholder="Short description…"></textarea>
     </div>
+    <!-- Hidden until migration 038 (menus.visual_key) is applied -->
+    <div class="form-group" id="fVisualKeyGroup" style="display:none;">
+      <label>Glass preview (แก้วจำลองในหน้าเลือก option)</label>
+      <select id="fVisualKey">
+        <option value="">— ไม่แสดงแก้ว (ใช้รูปเมนู) —</option>
+        <optgroup label="มัทฉะ">
+          <option value="matcha water">มัทฉะเพียว</option>
+          <option value="matcha coconut">มัทฉะมะพร้าว</option>
+          <option value="matcha water honey">มัทฉะน้ำผึ้ง</option>
+          <option value="matcha milk">มัทฉะลาเต้</option>
+          <option value="matcha milk strawberry">มัทฉะลาเต้ + ซอสสตรอว์เบอร์รี่</option>
+          <option value="matcha milk blueberry">มัทฉะลาเต้ + ซอสบลูเบอร์รี่</option>
+          <option value="matcha milk caramel">มัทฉะลาเต้ + คาราเมล</option>
+          <option value="matcha milk honey">มัทฉะลาเต้ + น้ำผึ้ง</option>
+          <option value="matcha milk biscoff">มัทฉะลาเต้ + บิสคอฟ</option>
+          <option value="matcha milk oreo">มัทฉะลาเต้ + โอรีโอ</option>
+          <option value="matcha earlgrey">มัทฉะ + เอิร์ลเกรย์</option>
+          <option value="matcha taro">มัทฉะ + นมเผือก</option>
+        </optgroup>
+        <optgroup label="ไม่มีมัทฉะ">
+          <option value="milk">นมเปล่า</option>
+          <option value="milk strawberry">นม + ซอสสตรอว์เบอร์รี่</option>
+          <option value="milk blueberry">นม + ซอสบลูเบอร์รี่</option>
+          <option value="milk caramel">นม + คาราเมล</option>
+          <option value="milk honey">นม + น้ำผึ้ง</option>
+          <option value="milk biscoff">นม + บิสคอฟ</option>
+          <option value="milk oreo">นม + โอรีโอ</option>
+          <option value="earlgrey">ชานมเอิร์ลเกรย์</option>
+        </optgroup>
+      </select>
+    </div>
     <div class="form-group">
       <label>
         <input type="checkbox" id="fActive" checked style="width:auto;margin-right:6px" />
         Active (visible to customers)
+      </label>
+    </div>
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="fPreorder" style="width:auto;margin-right:6px" />
+        Open for pre-order (orderable even while the shop is closed)
       </label>
     </div>
     <div class="modal-actions">
@@ -696,6 +780,10 @@
           <input type="radio" name="promoType" value="bundle" onchange="onPromoTypeChange()" />
           &#127873; เซตจับคู่
         </label>
+        <label>
+          <input type="radio" name="promoType" value="free_delivery" onchange="onPromoTypeChange()" />
+          &#128666; ส่งฟรี
+        </label>
       </div>
     </div>
 
@@ -724,7 +812,18 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <!-- free_delivery fields -->
+    <div id="promoFreeDeliveryFields" style="display:none;">
+      <div class="form-group">
+        <label>ส่งฟรีเมื่อซื้อครบ (แก้ว)</label>
+        <input type="number" id="promoMinQty" placeholder="2" min="1" step="1" value="2" />
+        <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
+          ลูกค้าจ่ายค่าส่ง 0 บาทเมื่อสั่งครบจำนวนนี้ &mdash; ค่าจ้างไรเดอร์ยังจ่ายตามปกติ (ร้านออกค่าส่งเอง)
+        </p>
+      </div>
+    </div>
+
+    <div class="form-group" id="promoMenuField">
       <label>เลือกเมนูที่ร่วมโปรฯ</label>
       <div class="menu-check-list" id="promoMenuCheckList">
         <!-- Populated by JS -->
@@ -828,7 +927,7 @@
   let shopId            = null;
   let shopIsOpen        = true;
   let currentCloseMsg   = 'ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^';
-  let currentDeliveryFee = 10;
+  let deliveryZones    = [];   // [{id, name, customer_pay, is_active, sort_order}]
   let dragSrcId        = null;
 
   // Promotions state
@@ -861,7 +960,7 @@
     } else {
       title.textContent       = 'ตั้งค่าร้าน';
       actionBtn.style.display = 'none';
-      document.getElementById('deliveryFeeInput').value = currentDeliveryFee;
+      loadDeliveryZones();
     }
   }
 
@@ -881,17 +980,88 @@
     shopId             = data.id;
     shopIsOpen         = data.is_open;
     currentCloseMsg    = data.close_message || 'ขณะนี้ร้านปิดรับออร์เดอร์ค่ะ ^^';
-    currentDeliveryFee = data.delivery_fee ?? 10;
   }
 
-  async function saveDeliveryFee() {
-    const raw = document.getElementById('deliveryFeeInput').value;
+  // ---- Delivery Zones (per-dorm fee) ----
+  async function loadDeliveryZones() {
+    const { data, error } = await supabase
+      .from('delivery_zones')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) {
+      document.getElementById('dzTableBody').innerHTML =
+        '<tr><td colspan="4" class="empty-state">โหลดไม่สำเร็จ: ' + escHtml(error.message) + '</td></tr>';
+      return;
+    }
+    deliveryZones = data || [];
+    renderDeliveryZones();
+  }
+
+  function renderDeliveryZones() {
+    const tbody = document.getElementById('dzTableBody');
+    if (!deliveryZones.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">ยังไม่มีที่อยู่จัดส่ง — เพิ่มหอใหม่ด้านบน</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    deliveryZones.forEach(z => {
+      const tr = document.createElement('tr');
+      if (!z.is_active) tr.style.opacity = '0.5';
+      tr.innerHTML =
+        '<td class="dz-name-cell">' + escHtml(z.name) + '</td>' +
+        '<td><input type="number" class="form-input dz-fee-input" min="0" step="1" value="' + z.customer_pay + '"' +
+          ' onchange="updateZoneFee(\'' + z.id + '\', this.value)"></td>' +
+        '<td style="text-align:center;"><input type="checkbox" ' + (z.is_active ? 'checked' : '') +
+          ' onchange="updateZoneActive(\'' + z.id + '\', this.checked)" style="width:auto;accent-color:var(--brown-dark);cursor:pointer;"></td>' +
+        '<td><button class="btn btn-delete btn-sm" onclick="deleteZone(\'' + z.id + '\')">ลบ</button></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function addDeliveryZone() {
+    const name = document.getElementById('dzNewName').value.trim();
+    const fee  = parseFloat(document.getElementById('dzNewFee').value);
+    if (!name)                      { showToast('กรุณากรอกชื่อหอพัก / คอนโด'); return; }
+    if (isNaN(fee) || fee < 0)      { showToast('กรุณากรอกค่าส่งที่ถูกต้อง'); return; }
+    if (deliveryZones.some(z => z.name.toLowerCase() === name.toLowerCase())) {
+      showToast('มีที่อยู่นี้อยู่แล้ว'); return;
+    }
+    const nextSort = deliveryZones.reduce((m, z) => Math.max(m, z.sort_order || 0), 0) + 1;
+    const { error } = await supabase.from('delivery_zones')
+      .insert({ name, customer_pay: fee, sort_order: nextSort, is_active: true });
+    if (error) { showToast('เพิ่มไม่สำเร็จ: ' + error.message); return; }
+    document.getElementById('dzNewName').value = '';
+    document.getElementById('dzNewFee').value  = '';
+    showToast('เพิ่ม "' + name + '" เรียบร้อย');
+    loadDeliveryZones();
+  }
+
+  async function updateZoneFee(id, raw) {
     const fee = parseFloat(raw);
-    if (isNaN(fee) || fee < 0) { showToast('กรุณากรอกจำนวนเงินที่ถูกต้อง'); return; }
-    const { error } = await supabase.from('shops').update({ delivery_fee: fee }).eq('id', shopId);
+    if (isNaN(fee) || fee < 0) { showToast('ค่าส่งไม่ถูกต้อง'); loadDeliveryZones(); return; }
+    const { error } = await supabase.from('delivery_zones')
+      .update({ customer_pay: fee }).eq('id', id);
     if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message); return; }
-    currentDeliveryFee = fee;
-    showToast('บันทึกค่าจัดส่ง ' + fee + ' บาท เรียบร้อย');
+    const z = deliveryZones.find(z => z.id === id); if (z) z.customer_pay = fee;
+    showToast('บันทึกค่าส่งเรียบร้อย');
+  }
+
+  async function updateZoneActive(id, active) {
+    const { error } = await supabase.from('delivery_zones')
+      .update({ is_active: active }).eq('id', id);
+    if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message); loadDeliveryZones(); return; }
+    const z = deliveryZones.find(z => z.id === id); if (z) z.is_active = active;
+    renderDeliveryZones();
+  }
+
+  async function deleteZone(id) {
+    const z = deliveryZones.find(z => z.id === id);
+    if (!z) return;
+    if (!confirm('ลบ "' + z.name + '" ออกจากรายการที่อยู่จัดส่ง?')) return;
+    const { error } = await supabase.from('delivery_zones').delete().eq('id', id);
+    if (error) { showToast('ลบไม่สำเร็จ: ' + error.message); return; }
+    showToast('ลบ "' + z.name + '" เรียบร้อย');
+    loadDeliveryZones();
   }
 
   async function loadCategories() {
@@ -1044,21 +1214,32 @@
     }
 
     grid.innerHTML = promotions.map(p => {
-      const isBundle = p.promo_type === 'bundle';
+      const isBundle       = p.promo_type === 'bundle';
+      const isFreeDelivery = p.promo_type === 'free_delivery';
       const menuIds  = (p.promotion_items || []).map(pi => pi.menu_id);
-      const menuNames = menuIds.map(id => {
-        const m = menuItems.find(mi => mi.id === id);
-        return m ? (m.name_th || m.name) : '?';
-      }).join(', ') || '—';
+      const menuNames = isFreeDelivery
+        ? 'ทุกเมนู (คิดทั้งออเดอร์)'
+        : (menuIds.map(id => {
+            const m = menuItems.find(mi => mi.id === id);
+            return m ? (m.name_th || m.name) : '?';
+          }).join(', ') || '—');
 
-      const discountDisplay = isBundle
-        ? `<div class="promo-bundle-price">฿${Number(p.bundle_price).toFixed(0)}</div><div style="font-size:12px;color:var(--text-muted);">ราคาเซต</div>`
-        : p.discount_type === 'percentage'
+      let discountDisplay, typeBadge, typeLabel;
+      if (isFreeDelivery) {
+        discountDisplay = `<div class="promo-discount-big">&#128666; ส่งฟรี</div><div style="font-size:12px;color:var(--text-muted);">เมื่อซื้อครบ ${p.min_qty} แก้ว</div>`;
+        typeBadge = 'free-delivery';
+        typeLabel = '&#128666; ส่งฟรี';
+      } else if (isBundle) {
+        discountDisplay = `<div class="promo-bundle-price">฿${Number(p.bundle_price).toFixed(0)}</div><div style="font-size:12px;color:var(--text-muted);">ราคาเซต</div>`;
+        typeBadge = 'bundle';
+        typeLabel = '&#127873; เซตจับคู่';
+      } else {
+        discountDisplay = p.discount_type === 'percentage'
           ? `<div class="promo-discount-big">-${p.discount_value}%</div>`
           : `<div class="promo-discount-big">-฿${p.discount_value}</div>`;
-
-      const typeBadge  = isBundle ? 'bundle' : 'item-discount';
-      const typeLabel  = isBundle ? '&#127873; เซตจับคู่' : '&#128281; ลดราคา';
+        typeBadge = 'item-discount';
+        typeLabel = '&#128281; ลดราคา';
+      }
       const dateRange  = p.start_date || p.end_date
         ? `${p.start_date || '∞'} → ${p.end_date || '∞'}`
         : 'ไม่จำกัดระยะเวลา';
@@ -1113,6 +1294,7 @@
       });
       document.getElementById('promoDiscountValue').value = p.discount_value || '';
       document.getElementById('promoBundlePrice').value   = p.bundle_price   || '';
+      document.getElementById('promoMinQty').value        = p.min_qty || 2;
       document.getElementById('promoStartDate').value     = p.start_date || '';
       document.getElementById('promoEndDate').value       = p.end_date   || '';
       document.getElementById('promoActive').checked      = p.is_active;
@@ -1127,6 +1309,7 @@
       document.querySelector('input[name="discountType"][value="percentage"]').checked = true;
       document.getElementById('promoDiscountValue').value = '';
       document.getElementById('promoBundlePrice').value   = '';
+      document.getElementById('promoMinQty').value        = 2;
       document.getElementById('promoStartDate').value     = '';
       document.getElementById('promoEndDate').value       = '';
       document.getElementById('promoActive').checked      = true;
@@ -1139,9 +1322,12 @@
   function closePromoModal() { document.getElementById('promoModal').classList.remove('show'); }
 
   function onPromoTypeChange() {
-    const isBundle = document.querySelector('input[name="promoType"]:checked')?.value === 'bundle';
-    document.getElementById('promoDiscountFields').style.display = isBundle ? 'none' : '';
-    document.getElementById('promoBundleFields').style.display   = isBundle ? '' : 'none';
+    const type = document.querySelector('input[name="promoType"]:checked')?.value;
+    document.getElementById('promoDiscountFields').style.display     = type === 'item_discount' ? '' : 'none';
+    document.getElementById('promoBundleFields').style.display       = type === 'bundle'        ? '' : 'none';
+    document.getElementById('promoFreeDeliveryFields').style.display = type === 'free_delivery' ? '' : 'none';
+    // Free delivery is order-wide — it isn't tied to specific menus.
+    document.getElementById('promoMenuField').style.display         = type === 'free_delivery' ? 'none' : '';
   }
 
   // ── Save promo ──
@@ -1155,10 +1341,12 @@
     const endDate      = document.getElementById('promoEndDate').value   || null;
     const isActive     = document.getElementById('promoActive').checked;
 
+    const minQty          = parseInt(document.getElementById('promoMinQty').value, 10);
     const selectedMenuIds = [...document.querySelectorAll('.promo-menu-chk:checked')].map(c => c.value);
 
     if (!name) { showToast('กรุณากรอกชื่อโปรโมชัน', true); return; }
-    if (!selectedMenuIds.length) { showToast('กรุณาเลือกเมนูอย่างน้อย 1 รายการ', true); return; }
+    if (promoType !== 'free_delivery' && !selectedMenuIds.length) { showToast('กรุณาเลือกเมนูอย่างน้อย 1 รายการ', true); return; }
+    if (promoType === 'free_delivery' && (isNaN(minQty) || minQty < 1)) { showToast('กรุณากรอกจำนวนแก้วขั้นต่ำ (อย่างน้อย 1)', true); return; }
 
     if (promoType === 'item_discount') {
       if (!discountType) { showToast('กรุณาเลือกประเภทส่วนลด', true); return; }
@@ -1177,6 +1365,7 @@
       discount_type:  promoType === 'item_discount' ? discountType : null,
       discount_value: promoType === 'item_discount' ? discountVal  : null,
       bundle_price:   promoType === 'bundle'        ? bundlePrice  : null,
+      min_qty:        promoType === 'free_delivery' ? minQty       : null,
       start_date:     startDate,
       end_date:       endDate,
       is_active:      isActive,
@@ -1197,9 +1386,11 @@
         promoId = data.id;
       }
 
-      const items = selectedMenuIds.map(mid => ({ promotion_id: promoId, menu_id: mid }));
-      const { error: itemErr } = await supabase.from('promotion_items').insert(items);
-      if (itemErr) throw itemErr;
+      if (selectedMenuIds.length) {
+        const items = selectedMenuIds.map(mid => ({ promotion_id: promoId, menu_id: mid }));
+        const { error: itemErr } = await supabase.from('promotion_items').insert(items);
+        if (itemErr) throw itemErr;
+      }
 
       closePromoModal();
       showToast(editingPromoId ? 'อัปเดตโปรโมชันเรียบร้อย' : 'เพิ่มโปรโมชันเรียบร้อย');
@@ -1258,7 +1449,7 @@
     }
 
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No items found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No items found.</td></tr>';
       return;
     }
 
@@ -1298,6 +1489,13 @@
           <button class="status-toggle ${item.is_active ? 'on' : ''}"
                   onclick="toggleActive('${item.id}', ${item.is_active})"
                   title="${item.is_active ? 'Click to disable' : 'Click to enable'}">
+            <span class="status-toggle-knob"></span>
+          </button>
+        </td>
+        <td>
+          <button class="status-toggle preorder ${item.is_preorder ? 'on' : ''}"
+                  onclick="togglePreorder('${item.id}', ${!!item.is_preorder})"
+                  title="${item.is_preorder ? 'Open for pre-order — click to turn off' : 'Click to open this item for pre-order'}">
             <span class="status-toggle-knob"></span>
           </button>
         </td>
@@ -1395,6 +1593,8 @@
     document.getElementById('fImageUrl').value = '';
     document.getElementById('fDesc').value     = '';
     document.getElementById('fActive').checked = true;
+    document.getElementById('fPreorder').checked = false;
+    setVisualKeyField('');
     document.getElementById('fImageUrl').dispatchEvent(new Event('input'));
     document.getElementById('menuModal').classList.add('show');
   }
@@ -1411,8 +1611,22 @@
     document.getElementById('fImageUrl').value = item.image_url   || '';
     document.getElementById('fDesc').value     = item.description || '';
     document.getElementById('fActive').checked = item.is_active;
+    document.getElementById('fPreorder').checked = !!item.is_preorder;
+    setVisualKeyField(item.visual_key || '');
     document.getElementById('fImageUrl').dispatchEvent(new Event('input'));
     document.getElementById('menuModal').classList.add('show');
+  }
+
+  // menus.visual_key only exists after migration 038; select('*') tells us whether it's there
+  function menusHaveVisualKey() { return menuItems.some(m => 'visual_key' in m); }
+
+  function setVisualKeyField(value) {
+    document.getElementById('fVisualKeyGroup').style.display = menusHaveVisualKey() ? '' : 'none';
+    const sel = document.getElementById('fVisualKey');
+    if (value && !sel.querySelector(`option[value="${CSS.escape(value)}"]`)) {
+      sel.add(new Option(value, value));   // keep a hand-written recipe instead of silently clearing it
+    }
+    sel.value = value;
   }
 
   function closeModal() {
@@ -1442,8 +1656,10 @@
       image_url:   document.getElementById('fImageUrl').value.trim(),
       description: document.getElementById('fDesc').value.trim(),
       is_active:   document.getElementById('fActive').checked,
+      is_preorder: document.getElementById('fPreorder').checked,
       shop_id:     shopId,
     };
+    if (menusHaveVisualKey()) payload.visual_key = document.getElementById('fVisualKey').value || null;
 
     if (!payload.name) { showToast('Name is required'); return; }
 
@@ -1545,6 +1761,17 @@
       .eq('id', itemId);
     if (error) { showToast('Error: ' + error.message); return; }
     showToast(!currentState ? '✅ Item enabled' : '⏸️ Item disabled');
+    await loadMenu();
+  }
+
+  // ---- Toggle Pre-order ----
+  async function togglePreorder(itemId, currentState) {
+    const { error } = await supabase
+      .from('menus')
+      .update({ is_preorder: !currentState })
+      .eq('id', itemId);
+    if (error) { showToast('Error: ' + error.message); return; }
+    showToast(!currentState ? '🗓️ Pre-order enabled' : 'Pre-order turned off');
     await loadMenu();
   }
 
