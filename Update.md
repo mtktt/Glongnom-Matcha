@@ -2492,6 +2492,14 @@ Clean deploy folder: `C:/Users/Teekatat/Glongnom-deploy-2026-10-22` (6.3 MB). Co
 4. Check on iPhone in a private tab: Halloween hero, open/closed text in the white box, place one real order end to end.
 5. After 1 Nov the skin turns off by itself (`SHOP_SKIN = 'auto'`).
 
+## Deployed 2026-10-22
+
+- GitHub: commit `ec69cbf` pushed to `main` (80 files; `backups/` now in `.gitignore`).
+- Netlify: deployed by Netlify CLI (`npx -y netlify-cli@17 deploy --prod --dir . --functions netlify/functions`) from the clean deploy folder to **glongnom-pos** (site id `e9fef177-3617-4efe-9808-19cb7444f27f`). Deploy id `6ad9f13ef223a5c061fd8bf8`.
+- Checked live: Halloween hero and ticker render, test button gone, themes/assets/admin/membership/rider pages return 200, `telegram-notify` function present (405 on GET), `backups/` not public (404).
+- Still to do: one real order on iPhone to confirm admin + Telegram.
+- Note: the account also has a site **glongnom-orders**, which got a Halloween deploy at 18:10 the same day. MM confirmed the customer site is glongnom-pos.
+
 ## Open ideas (Phase 4 — not started)
 
 Card → sheet morph (View Transitions), Prompt font for headings, bento strip (order again / today's promo / cups to free delivery), time-based dark mode.
