@@ -2507,3 +2507,38 @@ Card → sheet morph (View Transitions), Prompt font for headings, bento strip (
 ## Verification
 
 Every change: inline JS `node --check` + headless-Chrome screenshots at 390 px; MM confirmed each phase on a real iPhone. No real order was placed during testing.
+
+---
+
+# Session 2026-10-27 — Pink background, promo date fix, Glongnom Clicker
+
+## Changes
+
+| # | Change | Files |
+|---|---|---|
+| 1 | Normal-skin page background is now MM's pink paper tile (600×600). Copied to a clean filename; Halloween skin still uses its own background | `index.html:67`, `assets/bg-pink.jpg` (original: `assets/Glongnom BG Pink (600 x 600 px).jpg`) |
+| 2 | Promo date fix: "today" is now the Bangkok date (`toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })`) instead of `toISOString()` (UTC) | `index.html` `loadPromotions()`, `admin/index.html` promo map |
+| 3 | New category **Merchandise** (ของที่ระลึก, sort 5) + product **Glongnom Clicker** ฿79, `assets/clicker.jpg`, "Limited edition • blue switch". No options, no BOM | `supabase/migrations/039_merchandise_clicker.sql` |
+| 4 | New category tab `data-cat="merchandise"` (ของที่ระลึก / Merch) + `catMerch` i18n label | `index.html` |
+
+## Bug: promo not showing (root cause)
+
+- Promo **"1st Anniversary"** (item_discount, 10%, 12 matcha menus, 2026-10-27 → 2026-11-01, active) was correct in the DB.
+- The customer page took "today" from `new Date().toISOString()` = UTC date. At 01:49 Bangkok on 27 Oct, UTC was still 26 Oct, so the promo was filtered out. Any promo starting "today" was hidden from 00:00 to 07:00 Thai time.
+- Server `create_order` already used `(now() AT TIME ZONE 'Asia/Bangkok')::date`, so only the front-end was wrong.
+- Rule from now on: front-end date logic uses the Bangkok date, never `toISOString().slice(0, 10)`.
+
+## Migration
+
+- `039_merchandise_clicker.sql` run by MM; verified via REST (Clicker active, ฿79, category Merchandise). Next new migration is **040**.
+
+## Deployed 2026-10-27
+
+- GitHub: commit `6dd2a85` pushed to `main`.
+- Netlify: CLI deploy from a clean staging folder (same contents rule as 2026-10-22) to **glongnom-pos**. Deploy id `6adfa498d89e3cff20dcaea9`; 5 changed files uploaded.
+- Checked live: `/`, `/admin/`, `/assets/bg-pink.jpg`, `/assets/clicker.jpg`, `/themes/halloween.css` return 200; live `index.html` contains all 3 code changes.
+- Still to do: MM checks on iPhone (private tab) — pink BG with normal skin, -10% ribbon on matcha, Merch tab, one real order to confirm server-side 10% price.
+
+## Open note
+
+- Free-delivery counter (`totalCupCount()`) counts every cart item, so the clicker would count as a "cup". The free-delivery promo is inactive now; decide whether merch should be excluded before re-enabling it.
