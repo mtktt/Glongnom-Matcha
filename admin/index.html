@@ -1193,7 +1193,7 @@
 
     // Build menu → promo map (active promos only)
     promoMenuMap = {};
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });   // shop-local, not UTC
     promotions.forEach(p => {
       if (!p.is_active) return;
       if (p.start_date && p.start_date > today) return;

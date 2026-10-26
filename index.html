@@ -64,7 +64,7 @@
 
     body {
       font-family: 'Sarabun', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg) url('assets/bg-paper.jpg') repeat;   /* MM's paper texture, 600×600 seamless tile */
+      background: var(--bg) url('assets/bg-pink.jpg') repeat;   /* MM's pink paper texture, 600×600 seamless tile */
       color: var(--brown-dark);
       min-height: 100vh;
     }
@@ -922,6 +922,7 @@
     <button class="cat-btn"        data-cat="drinks" id="cat-drinks">เครื่องดื่ม</button>
     <button class="cat-btn"        data-cat="salmon"    id="cat-salmon">แซลมอน</button>
     <button class="cat-btn"        data-cat="sourdough" id="cat-sourdough">ซาวร์โดว์</button>
+    <button class="cat-btn"        data-cat="merchandise" id="cat-merch">ของที่ระลึก</button>
   </div>
   <div class="layout">
     <section>
@@ -1112,7 +1113,7 @@ const T = {
     tagline:'มัทฉะพรีเมี่ยมจากญี่ปุ่น',openBadge:'เปิดรับออเดอร์',closedBadge:'ปิดรับออเดอร์',
     closedTitle:'ร้านปิดรับออเดอร์ตอนนี้',closedSub:'แวะกลับมาใหม่นะคะ\nเปิดรับอีกครั้งเร็วๆ นี้',
     openSub:'เปิดทุกวัน 10:00–21:00',
-    catAll:'ทั้งหมด',catMatcha:'มัทฉะ',catDrinks:'เครื่องดื่ม',catSalmon:'แซลมอน',catSourdough:'ซาวร์โดว์',
+    catAll:'ทั้งหมด',catMatcha:'มัทฉะ',catDrinks:'เครื่องดื่ม',catSalmon:'แซลมอน',catSourdough:'ซาวร์โดว์',catMerch:'ของที่ระลึก',
     cartTitle:'ตะกร้าสินค้า',cartEmpty:'ยังไม่มีสินค้าในตะกร้า',cartTotal:'ยอดรวม',
     foodSubtotal:'ค่าอาหาร',itemsUnit:'รายการ',viewCart:'ดูตะกร้า',decQty:'ลดจำนวน',incQty:'เพิ่มจำนวน',
     freeDelLeft:'🚚 สั่งอีก {n} แก้ว ส่งฟรี!',freeDelDone:'🎉 ได้ส่งฟรีแล้ว!',
@@ -1156,7 +1157,7 @@ const T = {
     tagline:'Premium matcha, delivered to you',openBadge:'Open',closedBadge:'Closed',
     closedTitle:'We are closed right now',closedSub:'Come back soon —\nwe’ll reopen shortly.',
     openSub:'daily 10:00–21:00',
-    catAll:'All',catMatcha:'Matcha',catDrinks:'Drinks',catSalmon:'Salmon',catSourdough:'Sourdough',
+    catAll:'All',catMatcha:'Matcha',catDrinks:'Drinks',catSalmon:'Salmon',catSourdough:'Sourdough',catMerch:'Merch',
     cartTitle:'Cart',cartEmpty:'Your cart is empty',cartTotal:'Total',
     foodSubtotal:'Food',itemsUnit:'items',viewCart:'View cart',decQty:'Decrease',incQty:'Increase',
     freeDelLeft:'🚚 Add {n} more for free delivery!',freeDelDone:'🎉 Free delivery unlocked!',
@@ -1261,6 +1262,7 @@ function applyLang() {
   document.getElementById('cat-drinks').textContent = t('catDrinks');
   document.getElementById('cat-salmon').textContent    = t('catSalmon');
   document.getElementById('cat-sourdough').textContent = t('catSourdough');
+  document.getElementById('cat-merch').textContent     = t('catMerch');
   renderHeroState();
   document.getElementById('confirmTitle').textContent       = t('confirmTitle');
   document.getElementById('confirmThItem').textContent      = t('confirmThItem');
@@ -1393,7 +1395,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ── PROMOTIONS ──
 async function loadPromotions() {
-  const today = new Date().toISOString().slice(0, 10);
+  // Shop-local date (YYYY-MM-DD). toISOString() is UTC, which is still "yesterday"
+  // in Bangkok until 07:00 — hiding promos that start today. Matches create_order.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
   const { data, error } = await supabase
     .from('promotions')
     .select('*, promotion_items(menu_id)')
